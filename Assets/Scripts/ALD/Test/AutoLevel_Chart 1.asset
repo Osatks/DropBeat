@@ -1,0 +1,1197 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 636346a09f1999e40b70d9ac35e7c065, type: 3}
+  m_Name: AutoLevel_Chart 1
+  m_EditorClassIdentifier: Assembly-CSharp::BeatDrop.NoteChart
+  notes:
+  - hitTimeSeconds: 0.46444443
+    lane: 0
+  - hitTimeSeconds: 2.3417778
+    lane: 0
+  - hitTimeSeconds: 4.2191114
+    lane: 0
+  - hitTimeSeconds: 6.096444
+    lane: 0
+  - hitTimeSeconds: 7.973777
+    lane: 0
+  - hitTimeSeconds: 9.851111
+    lane: 0
+  - hitTimeSeconds: 11.728446
+    lane: 0
+  - hitTimeSeconds: 13.605781
+    lane: 0
+  - hitTimeSeconds: 15.483115
+    lane: 0
+  - hitTimeSeconds: 15.952449
+    lane: 0
+  - hitTimeSeconds: 16.187115
+    lane: 0
+  - hitTimeSeconds: 17.360449
+    lane: 0
+  - hitTimeSeconds: 18.533783
+    lane: 0
+  - hitTimeSeconds: 18.76845
+    lane: 0
+  - hitTimeSeconds: 19.237783
+    lane: 0
+  - hitTimeSeconds: 19.863562
+    lane: 0
+  - hitTimeSeconds: 21.115118
+    lane: 0
+  - hitTimeSeconds: 21.740896
+    lane: 0
+  - hitTimeSeconds: 22.679564
+    lane: 0
+  - hitTimeSeconds: 23.22712
+    lane: 0
+  - hitTimeSeconds: 23.61823
+    lane: 0
+  - hitTimeSeconds: 25.026232
+    lane: 0
+  - hitTimeSeconds: 25.33912
+    lane: 0
+  - hitTimeSeconds: 26.043121
+    lane: 0
+  - hitTimeSeconds: 26.512455
+    lane: 0
+  - hitTimeSeconds: 26.981789
+    lane: 0
+  - hitTimeSeconds: 27.216455
+    lane: 0
+  - hitTimeSeconds: 27.451122
+    lane: 0
+  - hitTimeSeconds: 27.68579
+    lane: 0
+  - hitTimeSeconds: 28.155123
+    lane: 0
+  - hitTimeSeconds: 28.38979
+    lane: 0
+  - hitTimeSeconds: 28.624456
+    lane: 0
+  - hitTimeSeconds: 29.09379
+    lane: 0
+  - hitTimeSeconds: 29.328457
+    lane: 0
+  - hitTimeSeconds: 29.563124
+    lane: 0
+  - hitTimeSeconds: 29.876013
+    lane: 0
+  - hitTimeSeconds: 30.267124
+    lane: 0
+  - hitTimeSeconds: 30.501791
+    lane: 0
+  - hitTimeSeconds: 30.736458
+    lane: 0
+  - hitTimeSeconds: 30.971125
+    lane: 0
+  - hitTimeSeconds: 31.205791
+    lane: 0
+  - hitTimeSeconds: 31.440458
+    lane: 0
+  - hitTimeSeconds: 31.675125
+    lane: 0
+  - hitTimeSeconds: 31.909792
+    lane: 0
+  - hitTimeSeconds: 32.14446
+    lane: 0
+  - hitTimeSeconds: 32.379124
+    lane: 0
+  - hitTimeSeconds: 32.61379
+    lane: 0
+  - hitTimeSeconds: 32.848457
+    lane: 0
+  - hitTimeSeconds: 33.31779
+    lane: 0
+  - hitTimeSeconds: 33.552456
+    lane: 0
+  - hitTimeSeconds: 33.787125
+    lane: 0
+  - hitTimeSeconds: 34.25646
+    lane: 0
+  - hitTimeSeconds: 34.569347
+    lane: 0
+  - hitTimeSeconds: 34.882236
+    lane: 0
+  - hitTimeSeconds: 35.195126
+    lane: 0
+  - hitTimeSeconds: 35.508015
+    lane: 0
+  - hitTimeSeconds: 35.899124
+    lane: 0
+  - hitTimeSeconds: 36.133793
+    lane: 0
+  - hitTimeSeconds: 36.368458
+    lane: 0
+  - hitTimeSeconds: 36.603127
+    lane: 0
+  - hitTimeSeconds: 36.83779
+    lane: 0
+  - hitTimeSeconds: 37.07246
+    lane: 0
+  - hitTimeSeconds: 37.307125
+    lane: 0
+  - hitTimeSeconds: 37.541794
+    lane: 0
+  - hitTimeSeconds: 38.011127
+    lane: 0
+  - hitTimeSeconds: 38.48046
+    lane: 0
+  - hitTimeSeconds: 38.949795
+    lane: 0
+  - hitTimeSeconds: 39.18446
+    lane: 0
+  - hitTimeSeconds: 39.41913
+    lane: 0
+  - hitTimeSeconds: 39.653793
+    lane: 0
+  - hitTimeSeconds: 39.888462
+    lane: 0
+  - hitTimeSeconds: 40.357796
+    lane: 0
+  - hitTimeSeconds: 40.82713
+    lane: 0
+  - hitTimeSeconds: 41.061794
+    lane: 0
+  - hitTimeSeconds: 41.296463
+    lane: 0
+  - hitTimeSeconds: 41.765797
+    lane: 0
+  - hitTimeSeconds: 42.23513
+    lane: 0
+  - hitTimeSeconds: 42.704464
+    lane: 0
+  - hitTimeSeconds: 43.173798
+    lane: 0
+  - hitTimeSeconds: 43.64313
+    lane: 0
+  - hitTimeSeconds: 44.112465
+    lane: 0
+  - hitTimeSeconds: 44.5818
+    lane: 0
+  - hitTimeSeconds: 45.051132
+    lane: 0
+  - hitTimeSeconds: 45.285797
+    lane: 0
+  - hitTimeSeconds: 45.520466
+    lane: 0
+  - hitTimeSeconds: 45.75513
+    lane: 0
+  - hitTimeSeconds: 45.9898
+    lane: 0
+  - hitTimeSeconds: 46.224464
+    lane: 0
+  - hitTimeSeconds: 46.459133
+    lane: 0
+  - hitTimeSeconds: 46.693798
+    lane: 0
+  - hitTimeSeconds: 46.928467
+    lane: 0
+  - hitTimeSeconds: 47.16313
+    lane: 0
+  - hitTimeSeconds: 47.3978
+    lane: 0
+  - hitTimeSeconds: 47.632465
+    lane: 0
+  - hitTimeSeconds: 47.867134
+    lane: 0
+  - hitTimeSeconds: 48.1018
+    lane: 0
+  - hitTimeSeconds: 48.336468
+    lane: 0
+  - hitTimeSeconds: 48.571133
+    lane: 0
+  - hitTimeSeconds: 48.8058
+    lane: 0
+  - hitTimeSeconds: 49.040466
+    lane: 0
+  - hitTimeSeconds: 49.275135
+    lane: 0
+  - hitTimeSeconds: 49.74447
+    lane: 0
+  - hitTimeSeconds: 50.213802
+    lane: 0
+  - hitTimeSeconds: 51.15247
+    lane: 0
+  - hitTimeSeconds: 51.778248
+    lane: 0
+  - hitTimeSeconds: 52.24758
+    lane: 0
+  - hitTimeSeconds: 52.56047
+    lane: 0
+  - hitTimeSeconds: 52.795135
+    lane: 0
+  - hitTimeSeconds: 53.029804
+    lane: 0
+  - hitTimeSeconds: 53.26447
+    lane: 0
+  - hitTimeSeconds: 53.499138
+    lane: 0
+  - hitTimeSeconds: 53.733803
+    lane: 0
+  - hitTimeSeconds: 53.96847
+    lane: 0
+  - hitTimeSeconds: 54.203136
+    lane: 0
+  - hitTimeSeconds: 54.437805
+    lane: 0
+  - hitTimeSeconds: 54.67247
+    lane: 0
+  - hitTimeSeconds: 54.90714
+    lane: 0
+  - hitTimeSeconds: 55.141804
+    lane: 0
+  - hitTimeSeconds: 55.376472
+    lane: 0
+  - hitTimeSeconds: 55.611137
+    lane: 0
+  - hitTimeSeconds: 55.845806
+    lane: 0
+  - hitTimeSeconds: 56.08047
+    lane: 0
+  - hitTimeSeconds: 56.31514
+    lane: 0
+  - hitTimeSeconds: 56.549805
+    lane: 0
+  - hitTimeSeconds: 56.784473
+    lane: 0
+  - hitTimeSeconds: 57.01914
+    lane: 0
+  - hitTimeSeconds: 57.253807
+    lane: 0
+  - hitTimeSeconds: 57.488472
+    lane: 0
+  - hitTimeSeconds: 57.72314
+    lane: 0
+  - hitTimeSeconds: 57.957806
+    lane: 0
+  - hitTimeSeconds: 58.192474
+    lane: 0
+  - hitTimeSeconds: 58.42714
+    lane: 0
+  - hitTimeSeconds: 58.661808
+    lane: 0
+  - hitTimeSeconds: 58.896473
+    lane: 0
+  - hitTimeSeconds: 59.13114
+    lane: 0
+  - hitTimeSeconds: 59.365807
+    lane: 0
+  - hitTimeSeconds: 59.600475
+    lane: 0
+  - hitTimeSeconds: 59.83514
+    lane: 0
+  - hitTimeSeconds: 60.06981
+    lane: 0
+  - hitTimeSeconds: 60.304474
+    lane: 0
+  - hitTimeSeconds: 60.539143
+    lane: 0
+  - hitTimeSeconds: 60.773808
+    lane: 0
+  - hitTimeSeconds: 61.008476
+    lane: 0
+  - hitTimeSeconds: 61.24314
+    lane: 0
+  - hitTimeSeconds: 61.47781
+    lane: 0
+  - hitTimeSeconds: 61.712475
+    lane: 0
+  - hitTimeSeconds: 61.947144
+    lane: 0
+  - hitTimeSeconds: 62.18181
+    lane: 0
+  - hitTimeSeconds: 62.416477
+    lane: 0
+  - hitTimeSeconds: 62.651142
+    lane: 0
+  - hitTimeSeconds: 62.88581
+    lane: 0
+  - hitTimeSeconds: 63.120476
+    lane: 0
+  - hitTimeSeconds: 63.355145
+    lane: 0
+  - hitTimeSeconds: 63.58981
+    lane: 0
+  - hitTimeSeconds: 63.82448
+    lane: 0
+  - hitTimeSeconds: 64.05914
+    lane: 0
+  - hitTimeSeconds: 64.29381
+    lane: 0
+  - hitTimeSeconds: 64.52847
+    lane: 0
+  - hitTimeSeconds: 64.76314
+    lane: 0
+  - hitTimeSeconds: 64.9978
+    lane: 0
+  - hitTimeSeconds: 65.23247
+    lane: 0
+  - hitTimeSeconds: 65.46713
+    lane: 0
+  - hitTimeSeconds: 65.7018
+    lane: 0
+  - hitTimeSeconds: 65.93646
+    lane: 0
+  - hitTimeSeconds: 66.17113
+    lane: 0
+  - hitTimeSeconds: 66.40579
+    lane: 0
+  - hitTimeSeconds: 66.64046
+    lane: 0
+  - hitTimeSeconds: 66.87512
+    lane: 0
+  - hitTimeSeconds: 67.10979
+    lane: 0
+  - hitTimeSeconds: 67.34445
+    lane: 0
+  - hitTimeSeconds: 67.57912
+    lane: 0
+  - hitTimeSeconds: 67.81378
+    lane: 0
+  - hitTimeSeconds: 68.04845
+    lane: 0
+  - hitTimeSeconds: 68.28311
+    lane: 0
+  - hitTimeSeconds: 68.51778
+    lane: 0
+  - hitTimeSeconds: 68.75244
+    lane: 0
+  - hitTimeSeconds: 68.98711
+    lane: 0
+  - hitTimeSeconds: 69.22177
+    lane: 0
+  - hitTimeSeconds: 69.456436
+    lane: 0
+  - hitTimeSeconds: 69.6911
+    lane: 0
+  - hitTimeSeconds: 69.925766
+    lane: 0
+  - hitTimeSeconds: 70.16043
+    lane: 0
+  - hitTimeSeconds: 70.395096
+    lane: 0
+  - hitTimeSeconds: 70.62976
+    lane: 0
+  - hitTimeSeconds: 70.864426
+    lane: 0
+  - hitTimeSeconds: 71.09909
+    lane: 0
+  - hitTimeSeconds: 71.333755
+    lane: 0
+  - hitTimeSeconds: 71.56842
+    lane: 0
+  - hitTimeSeconds: 71.803085
+    lane: 0
+  - hitTimeSeconds: 72.03775
+    lane: 0
+  - hitTimeSeconds: 72.272415
+    lane: 0
+  - hitTimeSeconds: 72.50708
+    lane: 0
+  - hitTimeSeconds: 72.741745
+    lane: 0
+  - hitTimeSeconds: 72.97641
+    lane: 0
+  - hitTimeSeconds: 73.211075
+    lane: 0
+  - hitTimeSeconds: 73.44574
+    lane: 0
+  - hitTimeSeconds: 73.680405
+    lane: 0
+  - hitTimeSeconds: 73.91507
+    lane: 0
+  - hitTimeSeconds: 74.149734
+    lane: 0
+  - hitTimeSeconds: 74.3844
+    lane: 0
+  - hitTimeSeconds: 74.619064
+    lane: 0
+  - hitTimeSeconds: 74.85373
+    lane: 0
+  - hitTimeSeconds: 75.088394
+    lane: 0
+  - hitTimeSeconds: 75.32306
+    lane: 0
+  - hitTimeSeconds: 75.557724
+    lane: 0
+  - hitTimeSeconds: 75.79239
+    lane: 0
+  - hitTimeSeconds: 76.027054
+    lane: 0
+  - hitTimeSeconds: 76.26172
+    lane: 0
+  - hitTimeSeconds: 76.49638
+    lane: 0
+  - hitTimeSeconds: 76.73105
+    lane: 0
+  - hitTimeSeconds: 76.96571
+    lane: 0
+  - hitTimeSeconds: 77.20038
+    lane: 0
+  - hitTimeSeconds: 77.43504
+    lane: 0
+  - hitTimeSeconds: 77.66971
+    lane: 0
+  - hitTimeSeconds: 77.90437
+    lane: 0
+  - hitTimeSeconds: 78.13904
+    lane: 0
+  - hitTimeSeconds: 78.3737
+    lane: 0
+  - hitTimeSeconds: 78.60837
+    lane: 0
+  - hitTimeSeconds: 78.84303
+    lane: 0
+  - hitTimeSeconds: 79.0777
+    lane: 0
+  - hitTimeSeconds: 79.31236
+    lane: 0
+  - hitTimeSeconds: 79.54703
+    lane: 0
+  - hitTimeSeconds: 79.78169
+    lane: 0
+  - hitTimeSeconds: 80.01636
+    lane: 0
+  - hitTimeSeconds: 80.25102
+    lane: 0
+  - hitTimeSeconds: 80.48569
+    lane: 0
+  - hitTimeSeconds: 80.72035
+    lane: 0
+  - hitTimeSeconds: 80.95502
+    lane: 0
+  - hitTimeSeconds: 81.18968
+    lane: 0
+  - hitTimeSeconds: 81.42435
+    lane: 0
+  - hitTimeSeconds: 81.65901
+    lane: 0
+  - hitTimeSeconds: 81.89368
+    lane: 0
+  - hitTimeSeconds: 82.12834
+    lane: 0
+  - hitTimeSeconds: 82.36301
+    lane: 0
+  - hitTimeSeconds: 82.59767
+    lane: 0
+  - hitTimeSeconds: 83.067
+    lane: 0
+  - hitTimeSeconds: 84.94432
+    lane: 0
+  - hitTimeSeconds: 86.82164
+    lane: 0
+  - hitTimeSeconds: 88.69896
+    lane: 0
+  - hitTimeSeconds: 90.57628
+    lane: 0
+  - hitTimeSeconds: 92.4536
+    lane: 0
+  - hitTimeSeconds: 94.33092
+    lane: 0
+  - hitTimeSeconds: 96.20824
+    lane: 0
+  - hitTimeSeconds: 97.61623
+    lane: 0
+  - hitTimeSeconds: 98.085556
+    lane: 0
+  - hitTimeSeconds: 99.962875
+    lane: 0
+  - hitTimeSeconds: 101.840195
+    lane: 0
+  - hitTimeSeconds: 102.935295
+    lane: 0
+  - hitTimeSeconds: 103.717514
+    lane: 0
+  - hitTimeSeconds: 104.812614
+    lane: 0
+  - hitTimeSeconds: 105.1255
+    lane: 0
+  - hitTimeSeconds: 105.36017
+    lane: 0
+  - hitTimeSeconds: 105.59483
+    lane: 0
+  - hitTimeSeconds: 105.8295
+    lane: 0
+  - hitTimeSeconds: 106.06416
+    lane: 0
+  - hitTimeSeconds: 106.29883
+    lane: 0
+  - hitTimeSeconds: 106.53349
+    lane: 0
+  - hitTimeSeconds: 106.76816
+    lane: 0
+  - hitTimeSeconds: 107.15926
+    lane: 0
+  - hitTimeSeconds: 107.62859
+    lane: 0
+  - hitTimeSeconds: 107.94148
+    lane: 0
+  - hitTimeSeconds: 108.17615
+    lane: 0
+  - hitTimeSeconds: 108.41081
+    lane: 0
+  - hitTimeSeconds: 108.64548
+    lane: 0
+  - hitTimeSeconds: 108.88014
+    lane: 0
+  - hitTimeSeconds: 109.11481
+    lane: 0
+  - hitTimeSeconds: 109.34947
+    lane: 0
+  - hitTimeSeconds: 109.58414
+    lane: 0
+  - hitTimeSeconds: 109.8188
+    lane: 0
+  - hitTimeSeconds: 110.05347
+    lane: 0
+  - hitTimeSeconds: 110.28813
+    lane: 0
+  - hitTimeSeconds: 110.5228
+    lane: 0
+  - hitTimeSeconds: 110.75746
+    lane: 0
+  - hitTimeSeconds: 110.99213
+    lane: 0
+  - hitTimeSeconds: 111.22679
+    lane: 0
+  - hitTimeSeconds: 111.46146
+    lane: 0
+  - hitTimeSeconds: 111.69612
+    lane: 0
+  - hitTimeSeconds: 111.930786
+    lane: 0
+  - hitTimeSeconds: 112.16545
+    lane: 0
+  - hitTimeSeconds: 112.400116
+    lane: 0
+  - hitTimeSeconds: 112.63478
+    lane: 0
+  - hitTimeSeconds: 113.10411
+    lane: 0
+  - hitTimeSeconds: 113.72988
+    lane: 0
+  - hitTimeSeconds: 114.19921
+    lane: 0
+  - hitTimeSeconds: 114.66854
+    lane: 0
+  - hitTimeSeconds: 115.13787
+    lane: 0
+  - hitTimeSeconds: 115.6072
+    lane: 0
+  - hitTimeSeconds: 116.07653
+    lane: 0
+  - hitTimeSeconds: 116.54586
+    lane: 0
+  - hitTimeSeconds: 116.85875
+    lane: 0
+  - hitTimeSeconds: 117.48452
+    lane: 0
+  - hitTimeSeconds: 117.95385
+    lane: 0
+  - hitTimeSeconds: 118.73607
+    lane: 0
+  - hitTimeSeconds: 120.37872
+    lane: 0
+  - hitTimeSeconds: 120.61339
+    lane: 0
+  - hitTimeSeconds: 120.84805
+    lane: 0
+  - hitTimeSeconds: 121.08272
+    lane: 0
+  - hitTimeSeconds: 121.31738
+    lane: 0
+  - hitTimeSeconds: 121.55205
+    lane: 0
+  - hitTimeSeconds: 121.78671
+    lane: 0
+  - hitTimeSeconds: 122.02138
+    lane: 0
+  - hitTimeSeconds: 122.25604
+    lane: 0
+  - hitTimeSeconds: 122.49071
+    lane: 0
+  - hitTimeSeconds: 122.72537
+    lane: 0
+  - hitTimeSeconds: 122.96004
+    lane: 0
+  - hitTimeSeconds: 123.1947
+    lane: 0
+  - hitTimeSeconds: 123.42937
+    lane: 0
+  - hitTimeSeconds: 123.66403
+    lane: 0
+  - hitTimeSeconds: 124.36803
+    lane: 0
+  - hitTimeSeconds: 126.245346
+    lane: 0
+  - hitTimeSeconds: 126.94934
+    lane: 0
+  - hitTimeSeconds: 127.653336
+    lane: 0
+  - hitTimeSeconds: 127.888
+    lane: 0
+  - hitTimeSeconds: 128.12267
+    lane: 0
+  - hitTimeSeconds: 128.35733
+    lane: 0
+  - hitTimeSeconds: 128.592
+    lane: 0
+  - hitTimeSeconds: 128.82666
+    lane: 0
+  - hitTimeSeconds: 129.06133
+    lane: 0
+  - hitTimeSeconds: 129.29599
+    lane: 0
+  - hitTimeSeconds: 129.53065
+    lane: 0
+  - hitTimeSeconds: 129.76532
+    lane: 0
+  - hitTimeSeconds: 129.99998
+    lane: 0
+  - hitTimeSeconds: 130.23465
+    lane: 0
+  - hitTimeSeconds: 130.46931
+    lane: 0
+  - hitTimeSeconds: 130.70398
+    lane: 0
+  - hitTimeSeconds: 130.93864
+    lane: 0
+  - hitTimeSeconds: 131.17331
+    lane: 0
+  - hitTimeSeconds: 131.40797
+    lane: 0
+  - hitTimeSeconds: 131.64264
+    lane: 0
+  - hitTimeSeconds: 131.8773
+    lane: 0
+  - hitTimeSeconds: 132.11197
+    lane: 0
+  - hitTimeSeconds: 132.34663
+    lane: 0
+  - hitTimeSeconds: 132.5813
+    lane: 0
+  - hitTimeSeconds: 132.81596
+    lane: 0
+  - hitTimeSeconds: 133.05063
+    lane: 0
+  - hitTimeSeconds: 133.2853
+    lane: 0
+  - hitTimeSeconds: 133.51996
+    lane: 0
+  - hitTimeSeconds: 133.75462
+    lane: 0
+  - hitTimeSeconds: 133.98929
+    lane: 0
+  - hitTimeSeconds: 134.22395
+    lane: 0
+  - hitTimeSeconds: 134.45862
+    lane: 0
+  - hitTimeSeconds: 134.69328
+    lane: 0
+  - hitTimeSeconds: 134.92795
+    lane: 0
+  - hitTimeSeconds: 135.16261
+    lane: 0
+  - hitTimeSeconds: 135.39728
+    lane: 0
+  - hitTimeSeconds: 135.63194
+    lane: 0
+  - hitTimeSeconds: 135.86661
+    lane: 0
+  - hitTimeSeconds: 136.10127
+    lane: 0
+  - hitTimeSeconds: 136.33594
+    lane: 0
+  - hitTimeSeconds: 136.5706
+    lane: 0
+  - hitTimeSeconds: 136.80527
+    lane: 0
+  - hitTimeSeconds: 137.03993
+    lane: 0
+  - hitTimeSeconds: 137.2746
+    lane: 0
+  - hitTimeSeconds: 137.50926
+    lane: 0
+  - hitTimeSeconds: 137.74393
+    lane: 0
+  - hitTimeSeconds: 137.97859
+    lane: 0
+  - hitTimeSeconds: 138.21326
+    lane: 0
+  - hitTimeSeconds: 138.44792
+    lane: 0
+  - hitTimeSeconds: 138.68259
+    lane: 0
+  - hitTimeSeconds: 138.91725
+    lane: 0
+  - hitTimeSeconds: 139.15192
+    lane: 0
+  - hitTimeSeconds: 139.38658
+    lane: 0
+  - hitTimeSeconds: 139.62125
+    lane: 0
+  - hitTimeSeconds: 139.85591
+    lane: 0
+  - hitTimeSeconds: 140.09058
+    lane: 0
+  - hitTimeSeconds: 140.32524
+    lane: 0
+  - hitTimeSeconds: 140.5599
+    lane: 0
+  - hitTimeSeconds: 140.79457
+    lane: 0
+  - hitTimeSeconds: 141.02924
+    lane: 0
+  - hitTimeSeconds: 141.2639
+    lane: 0
+  - hitTimeSeconds: 141.49857
+    lane: 0
+  - hitTimeSeconds: 141.73323
+    lane: 0
+  - hitTimeSeconds: 141.9679
+    lane: 0
+  - hitTimeSeconds: 142.20256
+    lane: 0
+  - hitTimeSeconds: 142.43723
+    lane: 0
+  - hitTimeSeconds: 142.67189
+    lane: 0
+  - hitTimeSeconds: 142.90656
+    lane: 0
+  - hitTimeSeconds: 143.14122
+    lane: 0
+  - hitTimeSeconds: 143.37589
+    lane: 0
+  - hitTimeSeconds: 143.61055
+    lane: 0
+  - hitTimeSeconds: 143.84521
+    lane: 0
+  - hitTimeSeconds: 144.07988
+    lane: 0
+  - hitTimeSeconds: 144.31454
+    lane: 0
+  - hitTimeSeconds: 144.54921
+    lane: 0
+  - hitTimeSeconds: 144.78387
+    lane: 0
+  - hitTimeSeconds: 145.01854
+    lane: 0
+  - hitTimeSeconds: 145.2532
+    lane: 0
+  - hitTimeSeconds: 145.48787
+    lane: 0
+  - hitTimeSeconds: 145.72253
+    lane: 0
+  - hitTimeSeconds: 145.9572
+    lane: 0
+  - hitTimeSeconds: 146.19186
+    lane: 0
+  - hitTimeSeconds: 146.42653
+    lane: 0
+  - hitTimeSeconds: 146.6612
+    lane: 0
+  - hitTimeSeconds: 146.89586
+    lane: 0
+  - hitTimeSeconds: 147.13052
+    lane: 0
+  - hitTimeSeconds: 147.36519
+    lane: 0
+  - hitTimeSeconds: 147.59985
+    lane: 0
+  - hitTimeSeconds: 147.83452
+    lane: 0
+  - hitTimeSeconds: 148.06918
+    lane: 0
+  - hitTimeSeconds: 148.30385
+    lane: 0
+  - hitTimeSeconds: 148.53851
+    lane: 0
+  - hitTimeSeconds: 148.77318
+    lane: 0
+  - hitTimeSeconds: 149.00784
+    lane: 0
+  - hitTimeSeconds: 149.24251
+    lane: 0
+  - hitTimeSeconds: 149.47717
+    lane: 0
+  - hitTimeSeconds: 149.71184
+    lane: 0
+  - hitTimeSeconds: 149.9465
+    lane: 0
+  - hitTimeSeconds: 150.18117
+    lane: 0
+  - hitTimeSeconds: 150.41583
+    lane: 0
+  - hitTimeSeconds: 150.6505
+    lane: 0
+  - hitTimeSeconds: 150.88516
+    lane: 0
+  - hitTimeSeconds: 151.11983
+    lane: 0
+  - hitTimeSeconds: 151.35449
+    lane: 0
+  - hitTimeSeconds: 151.58916
+    lane: 0
+  - hitTimeSeconds: 151.82382
+    lane: 0
+  - hitTimeSeconds: 152.05849
+    lane: 0
+  - hitTimeSeconds: 152.29315
+    lane: 0
+  - hitTimeSeconds: 152.52782
+    lane: 0
+  - hitTimeSeconds: 152.76248
+    lane: 0
+  - hitTimeSeconds: 152.99715
+    lane: 0
+  - hitTimeSeconds: 153.23181
+    lane: 0
+  - hitTimeSeconds: 153.46648
+    lane: 0
+  - hitTimeSeconds: 153.70114
+    lane: 0
+  - hitTimeSeconds: 153.9358
+    lane: 0
+  - hitTimeSeconds: 154.17047
+    lane: 0
+  - hitTimeSeconds: 154.40514
+    lane: 0
+  - hitTimeSeconds: 154.6398
+    lane: 0
+  - hitTimeSeconds: 154.87447
+    lane: 0
+  - hitTimeSeconds: 155.10913
+    lane: 0
+  - hitTimeSeconds: 155.3438
+    lane: 0
+  - hitTimeSeconds: 155.57846
+    lane: 0
+  - hitTimeSeconds: 155.81313
+    lane: 0
+  - hitTimeSeconds: 156.04779
+    lane: 0
+  - hitTimeSeconds: 156.28246
+    lane: 0
+  - hitTimeSeconds: 156.51712
+    lane: 0
+  - hitTimeSeconds: 156.75179
+    lane: 0
+  - hitTimeSeconds: 156.98645
+    lane: 0
+  - hitTimeSeconds: 157.22112
+    lane: 0
+  - hitTimeSeconds: 157.45578
+    lane: 0
+  - hitTimeSeconds: 157.69044
+    lane: 0
+  - hitTimeSeconds: 157.92511
+    lane: 0
+  - hitTimeSeconds: 158.15977
+    lane: 0
+  - hitTimeSeconds: 158.39444
+    lane: 0
+  - hitTimeSeconds: 158.6291
+    lane: 0
+  - hitTimeSeconds: 158.86377
+    lane: 0
+  - hitTimeSeconds: 159.09843
+    lane: 0
+  - hitTimeSeconds: 159.3331
+    lane: 0
+  - hitTimeSeconds: 159.56776
+    lane: 0
+  - hitTimeSeconds: 159.80243
+    lane: 0
+  - hitTimeSeconds: 160.0371
+    lane: 0
+  - hitTimeSeconds: 160.27176
+    lane: 0
+  - hitTimeSeconds: 160.50642
+    lane: 0
+  - hitTimeSeconds: 160.74109
+    lane: 0
+  - hitTimeSeconds: 160.97575
+    lane: 0
+  - hitTimeSeconds: 161.21042
+    lane: 0
+  - hitTimeSeconds: 161.44508
+    lane: 0
+  - hitTimeSeconds: 161.67975
+    lane: 0
+  - hitTimeSeconds: 161.91441
+    lane: 0
+  - hitTimeSeconds: 162.14908
+    lane: 0
+  - hitTimeSeconds: 162.38374
+    lane: 0
+  - hitTimeSeconds: 162.61841
+    lane: 0
+  - hitTimeSeconds: 162.85307
+    lane: 0
+  - hitTimeSeconds: 163.08774
+    lane: 0
+  - hitTimeSeconds: 163.3224
+    lane: 0
+  - hitTimeSeconds: 163.55707
+    lane: 0
+  - hitTimeSeconds: 163.79173
+    lane: 0
+  - hitTimeSeconds: 164.0264
+    lane: 0
+  - hitTimeSeconds: 164.26106
+    lane: 0
+  - hitTimeSeconds: 164.49573
+    lane: 0
+  - hitTimeSeconds: 164.7304
+    lane: 0
+  - hitTimeSeconds: 165.04327
+    lane: 0
+  - hitTimeSeconds: 165.43439
+    lane: 0
+  - hitTimeSeconds: 165.66905
+    lane: 0
+  - hitTimeSeconds: 165.90372
+    lane: 0
+  - hitTimeSeconds: 166.13838
+    lane: 0
+  - hitTimeSeconds: 166.37305
+    lane: 0
+  - hitTimeSeconds: 166.60771
+    lane: 0
+  - hitTimeSeconds: 166.84238
+    lane: 0
+  - hitTimeSeconds: 167.07704
+    lane: 0
+  - hitTimeSeconds: 167.3117
+    lane: 0
+  - hitTimeSeconds: 167.54637
+    lane: 0
+  - hitTimeSeconds: 167.78104
+    lane: 0
+  - hitTimeSeconds: 168.0157
+    lane: 0
+  - hitTimeSeconds: 168.25037
+    lane: 0
+  - hitTimeSeconds: 168.48503
+    lane: 0
+  - hitTimeSeconds: 168.7197
+    lane: 0
+  - hitTimeSeconds: 168.95436
+    lane: 0
+  - hitTimeSeconds: 169.18903
+    lane: 0
+  - hitTimeSeconds: 169.42369
+    lane: 0
+  - hitTimeSeconds: 169.65836
+    lane: 0
+  - hitTimeSeconds: 169.89302
+    lane: 0
+  - hitTimeSeconds: 170.12769
+    lane: 0
+  - hitTimeSeconds: 170.36235
+    lane: 0
+  - hitTimeSeconds: 170.59702
+    lane: 0
+  - hitTimeSeconds: 170.83168
+    lane: 0
+  - hitTimeSeconds: 171.06635
+    lane: 0
+  - hitTimeSeconds: 171.30101
+    lane: 0
+  - hitTimeSeconds: 171.53568
+    lane: 0
+  - hitTimeSeconds: 171.77034
+    lane: 0
+  - hitTimeSeconds: 172.005
+    lane: 0
+  - hitTimeSeconds: 172.23967
+    lane: 0
+  - hitTimeSeconds: 172.47433
+    lane: 0
+  - hitTimeSeconds: 172.709
+    lane: 0
+  - hitTimeSeconds: 172.94366
+    lane: 0
+  - hitTimeSeconds: 173.17833
+    lane: 0
+  - hitTimeSeconds: 173.49121
+    lane: 0
+  - hitTimeSeconds: 173.88232
+    lane: 0
+  - hitTimeSeconds: 174.11699
+    lane: 0
+  - hitTimeSeconds: 174.35165
+    lane: 0
+  - hitTimeSeconds: 174.58632
+    lane: 0
+  - hitTimeSeconds: 174.82098
+    lane: 0
+  - hitTimeSeconds: 175.05565
+    lane: 0
+  - hitTimeSeconds: 175.29031
+    lane: 0
+  - hitTimeSeconds: 175.52498
+    lane: 0
+  - hitTimeSeconds: 175.75964
+    lane: 0
+  - hitTimeSeconds: 175.99431
+    lane: 0
+  - hitTimeSeconds: 176.30719
+    lane: 0
+  - hitTimeSeconds: 176.77652
+    lane: 0
+  - hitTimeSeconds: 177.24585
+    lane: 0
+  - hitTimeSeconds: 177.63696
+    lane: 0
+  - hitTimeSeconds: 177.87163
+    lane: 0
+  - hitTimeSeconds: 178.1063
+    lane: 0
+  - hitTimeSeconds: 178.34096
+    lane: 0
+  - hitTimeSeconds: 178.57562
+    lane: 0
+  - hitTimeSeconds: 178.81029
+    lane: 0
+  - hitTimeSeconds: 179.04495
+    lane: 0
+  - hitTimeSeconds: 179.27962
+    lane: 0
+  - hitTimeSeconds: 179.51428
+    lane: 0
+  - hitTimeSeconds: 179.74895
+    lane: 0
+  - hitTimeSeconds: 179.98361
+    lane: 0
+  - hitTimeSeconds: 180.21828
+    lane: 0
+  - hitTimeSeconds: 180.45294
+    lane: 0
+  - hitTimeSeconds: 180.6876
+    lane: 0
+  - hitTimeSeconds: 180.92227
+    lane: 0
+  - hitTimeSeconds: 181.15694
+    lane: 0
+  - hitTimeSeconds: 181.3916
+    lane: 0
+  - hitTimeSeconds: 181.62627
+    lane: 0
+  - hitTimeSeconds: 181.86093
+    lane: 0
+  - hitTimeSeconds: 182.0956
+    lane: 0
+  - hitTimeSeconds: 182.33026
+    lane: 0
+  - hitTimeSeconds: 182.56493
+    lane: 0
+  - hitTimeSeconds: 182.79959
+    lane: 0
+  - hitTimeSeconds: 183.03426
+    lane: 0
+  - hitTimeSeconds: 183.26892
+    lane: 0
+  - hitTimeSeconds: 183.50359
+    lane: 0
+  - hitTimeSeconds: 183.73825
+    lane: 0
+  - hitTimeSeconds: 183.97292
+    lane: 0
+  - hitTimeSeconds: 184.20758
+    lane: 0
+  - hitTimeSeconds: 184.44225
+    lane: 0
+  - hitTimeSeconds: 184.67691
+    lane: 0
+  - hitTimeSeconds: 184.91158
+    lane: 0
+  - hitTimeSeconds: 185.14624
+    lane: 0
+  - hitTimeSeconds: 185.3809
+    lane: 0
+  - hitTimeSeconds: 185.61557
+    lane: 0
+  - hitTimeSeconds: 185.85023
+    lane: 0
+  - hitTimeSeconds: 186.0849
+    lane: 0
+  - hitTimeSeconds: 186.31956
+    lane: 0
+  - hitTimeSeconds: 186.55423
+    lane: 0
+  - hitTimeSeconds: 186.7889
+    lane: 0
+  - hitTimeSeconds: 187.02356
+    lane: 0
+  - hitTimeSeconds: 187.25822
+    lane: 0
+  - hitTimeSeconds: 187.49289
+    lane: 0
+  - hitTimeSeconds: 187.72755
+    lane: 0
+  - hitTimeSeconds: 188.19688
+    lane: 0
+  - hitTimeSeconds: 190.0742
+    lane: 0
+  - hitTimeSeconds: 192.10797
+    lane: 0
+  - hitTimeSeconds: 193.51596
+    lane: 0
+  - hitTimeSeconds: 193.98529
+    lane: 0
+  - hitTimeSeconds: 195.00217
+    lane: 0
+  - hitTimeSeconds: 195.23683
+    lane: 0
+  - hitTimeSeconds: 195.4715
+    lane: 0
+  - hitTimeSeconds: 195.70616
+    lane: 0
+  - hitTimeSeconds: 195.94083
+    lane: 0
+  - hitTimeSeconds: 196.41016
+    lane: 0
+  - hitTimeSeconds: 196.64482
+    lane: 0
+  - hitTimeSeconds: 196.87949
+    lane: 0
+  - hitTimeSeconds: 197.2706
+    lane: 0
+  - hitTimeSeconds: 197.73993
+    lane: 0
+  - hitTimeSeconds: 198.28748
+    lane: 0
+  - hitTimeSeconds: 198.52214
+    lane: 0
+  - hitTimeSeconds: 198.7568
+    lane: 0
+  - hitTimeSeconds: 199.61725
+    lane: 0
+  - hitTimeSeconds: 200.08658
+    lane: 0
+  - hitTimeSeconds: 200.55591
+    lane: 0
+  - hitTimeSeconds: 201.33812
+    lane: 0
+  - hitTimeSeconds: 202.04211
+    lane: 0
+  - hitTimeSeconds: 202.27678
+    lane: 0
+  - hitTimeSeconds: 202.51144
+    lane: 0
+  - hitTimeSeconds: 202.74611
+    lane: 0
+  - hitTimeSeconds: 203.21544
+    lane: 0
+  - hitTimeSeconds: 205.09276
+    lane: 0

@@ -10,8 +10,9 @@
 
 # Generated/debug capture folders
 Assets/Screenshots/
+Assets/Screenshots.meta
 Assets/_Recovery/
-
+Assets/_Recovery.meta
 # IDE and editor caches
 .vs/
 .vscode/
@@ -28,17 +29,14 @@ Assets/_Recovery/
 *.mdb
 *.opendb
 *.VC.db
-
 # Unity crash/build artifacts
 sysinfo.txt
 *.apk
 *.aab
 *.unitypackage
-
 # OS files
 .DS_Store
 Thumbs.db
 desktop.ini
-
 # Do keep Unity asset metadata with assets
 !*.meta

@@ -113,3 +113,6 @@ InitTestScene*.unity*
 /Assets/_Recovery.meta
 /.vscode/
 *.slnx
+
+# DropBeat click-preview exports
+/[Vv]erification/

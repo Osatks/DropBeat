@@ -50,6 +50,10 @@ jobs:
         run: |
           APP=$(find dd/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
           echo "App: $APP"
+          # Unity ships UnityRuntime.framework as a static library with a detached signature; Xcode
+          # embeds a stub binary in its place, so that old signature no longer matches and iOS refuses
+          # to install the app (0xe8008001). Remove it so the signing tool signs the framework fresh.
+          rm -rf "$APP/Frameworks/UnityRuntime.framework/_CodeSignature"
           mkdir Payload
           cp -R "$APP" Payload/
           zip -qry DropBeat.ipa Payload

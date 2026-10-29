@@ -1,0 +1,68 @@
+name: iOS IPA (unsigned)
+
+# Unity on Windows can only export the Xcode project; compiling it needs a Mac. This workflow does that
+# on a GitHub macOS runner and produces an unsigned DropBeat.ipa.
+#  1. In Unity build iOS to Builds/iOS, zip that folder as DropBeat-iOS-xcode.zip.
+#  2. Attach the zip to a release (default tag: ios-xcode).
+#  3. Run this workflow (Actions tab, or push to the ios-build branch).
+#  4. Download DropBeat.ipa from the run (or the release) and install it with Sideloadly,
+#     which signs it with your Apple ID.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag that holds DropBeat-iOS-xcode.zip
+        required: true
+        default: ios-xcode
+  push:
+    branches: [ios-build]
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag || 'ios-xcode' }}
+    steps:
+      - name: Download the Xcode project
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'DropBeat-iOS-xcode.zip'
+          unzip -q DropBeat-iOS-xcode.zip -d xcode
+
+      - name: Compile (no code signing)
+        working-directory: xcode
+        run: |
+          # Zips made on Windows carry no execute bits.
+          find . -name '*.sh' -exec chmod +x {} +
+          chmod -R +x Il2CppOutputProject/IL2CPP/build
+          xcodebuild -version
+          xcodebuild -project Unity-iPhone.xcodeproj -scheme Unity-iPhone -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ../dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            build > ../build.log 2>&1 || { tail -n 300 ../build.log; exit 1; }
+          tail -n 20 ../build.log
+
+      - name: Package the .ipa
+        run: |
+          APP=$(find dd/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          echo "App: $APP"
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry DropBeat.ipa Payload
+          ls -lh DropBeat.ipa
+          gh release upload "$TAG" DropBeat.ipa --clobber --repo "$GITHUB_REPOSITORY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DropBeat-ipa
+          path: DropBeat.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-log
+          path: build.log

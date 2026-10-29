@@ -55,6 +55,162 @@ namespace DropBeat
             return mesh;
         }
 
+        /// <summary>
+        /// Solid ring band in the XY plane (same orientation as the ring quad): a box cross-section swept round
+        /// <paramref name="radius"/>. UV.x = angle clockwise from +Y (0..1, like the Ring shader), UV.y = face
+        /// (0 front, 1 outer wall, 2 back, 3 inner wall).
+        /// </summary>
+        public static Mesh RingBand(float radius, float halfWidth, float halfDepth, int segments = 96)
+        {
+            string key = "band" + radius + "_" + halfWidth + "_" + halfDepth + "_" + segments;
+            if (Cache.TryGetValue(key, out Mesh cached) && cached != null) return cached;
+
+            float rIn = radius - halfWidth, rOut = radius + halfWidth;
+            var verts = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            for (int f = 0; f < 4; f++)
+            {
+                int start = verts.Count;
+                for (int i = 0; i <= segments; i++)
+                {
+                    float u = i / (float)segments;
+                    float a = u * Mathf.PI * 2f;
+                    var dir = new Vector3(Mathf.Sin(a), Mathf.Cos(a), 0f);
+                    Vector3 p0, p1, n;
+                    switch (f)
+                    {
+                        case 0: p0 = dir * rIn + Vector3.back * halfDepth; p1 = dir * rOut + Vector3.back * halfDepth; n = Vector3.back; break;
+                        case 1: p0 = dir * rOut + Vector3.back * halfDepth; p1 = dir * rOut + Vector3.forward * halfDepth; n = dir; break;
+                        case 2: p0 = dir * rOut + Vector3.forward * halfDepth; p1 = dir * rIn + Vector3.forward * halfDepth; n = Vector3.forward; break;
+                        default: p0 = dir * rIn + Vector3.forward * halfDepth; p1 = dir * rIn + Vector3.back * halfDepth; n = -dir; break;
+                    }
+                    verts.Add(p0); verts.Add(p1);
+                    normals.Add(n); normals.Add(n);
+                    uvs.Add(new Vector2(u, f)); uvs.Add(new Vector2(u, f));
+                }
+                for (int i = 0; i < segments; i++)
+                {
+                    int a = start + i * 2, b = a + 2;
+                    tris.Add(a); tris.Add(b); tris.Add(a + 1);
+                    tris.Add(b); tris.Add(b + 1); tris.Add(a + 1);
+                }
+            }
+
+            var mesh = new Mesh { name = key };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            Cache[key] = mesh;
+            return mesh;
+        }
+
+        /// <summary>Wireframe cube of size 1: twelve thin square bars along its edges.</summary>
+        public static Mesh WireCube(float bar)
+        {
+            string key = "wirecube" + bar;
+            if (Cache.TryGetValue(key, out Mesh cached) && cached != null) return cached;
+            var combine = new List<CombineInstance>();
+            Mesh box = Box();
+            float h = 0.5f;
+            for (int axis = 0; axis < 3; axis++)
+            {
+                for (int s = 0; s < 4; s++)
+                {
+                    float a = (s & 1) == 0 ? -h : h;
+                    float b = (s & 2) == 0 ? -h : h;
+                    Vector3 pos = axis == 0 ? new Vector3(0, a, b) : axis == 1 ? new Vector3(a, 0, b) : new Vector3(a, b, 0);
+                    Vector3 scale = axis == 0 ? new Vector3(1f + bar, bar, bar) : axis == 1 ? new Vector3(bar, 1f + bar, bar) : new Vector3(bar, bar, 1f + bar);
+                    combine.Add(new CombineInstance { mesh = box, transform = Matrix4x4.TRS(pos, Quaternion.identity, scale) });
+                }
+            }
+            var mesh = new Mesh { name = key };
+            mesh.CombineMeshes(combine.ToArray(), true, true);
+            mesh.RecalculateBounds();
+            Cache[key] = mesh;
+            return mesh;
+        }
+
+        /// <summary>Unit cube centred on the origin, flat normals, white vertex colour.</summary>
+        public static Mesh Box()
+        {
+            const string key = "box";
+            if (Cache.TryGetValue(key, out Mesh cached) && cached != null) return cached;
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            Vector3[] n = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
+            foreach (Vector3 f in n)
+            {
+                Vector3 u = f.y != 0f ? Vector3.right : Vector3.up;
+                Vector3 v = Vector3.Cross(f, u);
+                int i = verts.Count;
+                verts.Add((f - u - v) * 0.5f); verts.Add((f + u - v) * 0.5f);
+                verts.Add((f + u + v) * 0.5f); verts.Add((f - u + v) * 0.5f);
+                tris.Add(i); tris.Add(i + 1); tris.Add(i + 2);
+                tris.Add(i); tris.Add(i + 2); tris.Add(i + 3);
+            }
+            var mesh = new Mesh { name = key };
+            mesh.SetVertices(verts);
+            var colors = new List<Color>();
+            for (int i = 0; i < verts.Count; i++) colors.Add(Color.white);
+            mesh.SetColors(colors);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            Cache[key] = mesh;
+            return mesh;
+        }
+
+        /// <summary>Smooth UV sphere of diameter 1 (enough segments for clean chrome highlights).</summary>
+        public static Mesh Sphere(int segments = 64, int rings = 40)
+        {
+            string key = "sphere" + segments + "_" + rings;
+            if (Cache.TryGetValue(key, out Mesh cached) && cached != null) return cached;
+
+            var verts = new List<Vector3>((segments + 1) * (rings + 1));
+            var normals = new List<Vector3>(verts.Capacity);
+            var uvs = new List<Vector2>(verts.Capacity);
+            var tris = new List<int>(segments * rings * 6);
+            for (int r = 0; r <= rings; r++)
+            {
+                float v = r / (float)rings;
+                float theta = v * Mathf.PI;
+                for (int s = 0; s <= segments; s++)
+                {
+                    float u = s / (float)segments;
+                    float phi = u * Mathf.PI * 2f;
+                    var n = new Vector3(Mathf.Sin(theta) * Mathf.Cos(phi), Mathf.Cos(theta), Mathf.Sin(theta) * Mathf.Sin(phi));
+                    verts.Add(n * 0.5f);
+                    normals.Add(n);
+                    uvs.Add(new Vector2(u, 1f - v));
+                }
+            }
+
+            int row = segments + 1;
+            for (int r = 0; r < rings; r++)
+            {
+                for (int s = 0; s < segments; s++)
+                {
+                    int a = r * row + s;
+                    int b = a + row;
+                    tris.Add(a); tris.Add(a + 1); tris.Add(b);
+                    tris.Add(b); tris.Add(a + 1); tris.Add(b + 1);
+                }
+            }
+
+            var mesh = new Mesh { name = key };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            Cache[key] = mesh;
+            return mesh;
+        }
+
         /// <summary>Unit quad in the XY plane centred on the origin, facing -Z.</summary>
         public static Mesh Quad()
         {

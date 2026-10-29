@@ -97,7 +97,9 @@ namespace DropBeat
 
         public bool FullCombo => Miss == 0 && Judged == TotalNotes;
 
-        public int Register(Grade grade, double error)
+        /// <param name="multiplier">2 during overdrive.</param>
+        /// <param name="countError">False for hold tails (no tap timing to record).</param>
+        public int Register(Grade grade, double error, int multiplier = 1, bool countError = true)
         {
             int points = 0;
             switch (grade)
@@ -124,11 +126,11 @@ namespace DropBeat
                     return 0;
             }
 
-            points = Mathf.RoundToInt(points * ComboMultiplier);
+            points = Mathf.RoundToInt(points * ComboMultiplier) * Mathf.Max(1, multiplier);
             Score += points;
             Combo++;
             MaxCombo = Mathf.Max(MaxCombo, Combo);
-            Errors.Add((float)error);
+            if (countError) Errors.Add((float)error);
             return points;
         }
 

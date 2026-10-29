@@ -16,6 +16,8 @@ namespace DropBeat
         public float[] beatStrength = Array.Empty<float>();
         /// <summary>Kick-band (30-250 Hz) onset strength at each beat, ~0..1.</summary>
         public float[] kickStrength = Array.Empty<float>();
+        /// <summary>Snare / clap band (250 Hz - 5 kHz) onset strength at each beat, ~0..1.</summary>
+        public float[] snareStrength = Array.Empty<float>();
         /// <summary>Broadband onset strength half a beat after each beat (off-beat eighth), ~0..1.</summary>
         public float[] offStrength = Array.Empty<float>();
         /// <summary>RMS loudness of the span [beat, next beat), ~0..1.</summary>
@@ -28,6 +30,10 @@ namespace DropBeat
         public float driftMs;
         public bool driftCorrected;
         public float detectorBiasMs;
+        /// <summary>Estimated key: root pitch class (0 = C .. 11 = B) and mode.</summary>
+        public int keyRoot = 9;
+        public bool keyMinor = true;
+        public float keyConfidence;
         public string log = string.Empty;
     }
 
@@ -66,6 +72,7 @@ namespace DropBeat
             public float[] broad;
             public float[] sub;
             public float[] kick;
+            public float[] snare;
             public float hop;
         }
 
@@ -93,6 +100,7 @@ namespace DropBeat
             float[] ob = Normalize(on.broad, on.hop);
             float[] osub = Normalize(on.sub, on.hop);
             float[] okick = Normalize(on.kick, on.hop);
+            float[] osnare = Normalize(on.snare, on.hop);
 
             float bpm;
             if (settings.bpmOverride > 0f)
@@ -171,6 +179,7 @@ namespace DropBeat
             int n = beats.Count;
             result.beatStrength = new float[n];
             result.kickStrength = new float[n];
+            result.snareStrength = new float[n];
             result.offStrength = new float[n];
             result.loudness = new float[n];
             for (int k = 0; k < n; k++)
@@ -179,16 +188,20 @@ namespace DropBeat
                 // Onset frames are biased by `bias`, so sample them where the detector actually fires.
                 result.beatStrength[k] = MaxNear(on, ob, t + bias, 0.025f);
                 result.kickStrength[k] = Math.Max(MaxNear(on, okick, t + bias, 0.03f), 0.5f * MaxNear(on, osub, t + bias, 0.03f));
+                result.snareStrength[k] = MaxNear(on, osnare, t + bias, 0.025f);
                 result.offStrength[k] = MaxNear(on, ob, t + period * 0.5f + bias, 0.025f);
                 result.loudness[k] = Rms(x, sr, t, t + period);
             }
 
             NormalizeByPercentile(result.beatStrength, 0.95f);
             NormalizeByPercentile(result.kickStrength, 0.95f);
+            NormalizeByPercentile(result.snareStrength, 0.95f);
             NormalizeByPercentile(result.offStrength, 0.95f);
             NormalizeByPercentile(result.loudness, 0.95f);
 
             result.downbeatPhase = EstimateDownbeatPhase(result);
+            EstimateKey(ComputeChroma(x, sr), result);
+            log.AppendLine("Key " + KeyName(result.keyRoot, result.keyMinor) + " (confidence " + F(result.keyConfidence, 2) + ")");
             log.AppendLine("Beats " + n + ", downbeat phase " + result.downbeatPhase);
             result.log = log.ToString();
             return result;
@@ -212,6 +225,7 @@ namespace DropBeat
             int subLo = broadLo;
             int subHi = Math.Max(subLo + 1, (int)Math.Ceiling(90f / binHz));
             int kickHi = Math.Max(subHi + 1, (int)Math.Ceiling(250f / binHz));
+            int snareHi = Math.Max(kickHi + 1, Math.Min(half, (int)Math.Ceiling(5000f / binHz)));
 
             var result = new Onsets
             {
@@ -219,7 +233,8 @@ namespace DropBeat
                 time = new float[frames - 1],
                 broad = new float[frames - 1],
                 sub = new float[frames - 1],
-                kick = new float[frames - 1]
+                kick = new float[frames - 1],
+                snare = new float[frames - 1]
             };
 
             var fft = new FFT(n);
@@ -265,7 +280,7 @@ namespace DropBeat
                     int frame = f + pass;
                     if (havePrev)
                     {
-                        float broad = 0f, sub = 0f, kick = 0f;
+                        float broad = 0f, sub = 0f, kick = 0f, snare = 0f;
                         for (int k = broadLo; k <= half; k++)
                         {
                             float d = cur[k] - prev[k];
@@ -273,12 +288,14 @@ namespace DropBeat
                             broad += d;
                             if (k < subHi) sub += d;
                             else if (k < kickHi) kick += d;
+                            else if (k < snareHi) snare += d;
                         }
 
                         int o = frame - 1;
                         result.broad[o] = broad;
                         result.sub[o] = sub;
                         result.kick[o] = kick;
+                        result.snare[o] = snare;
                         result.time[o] = (frame * hop + n * 0.5f) / sr;
                     }
 
@@ -541,6 +558,99 @@ namespace DropBeat
             }
 
             return best;
+        }
+
+        private static readonly double[] MajorProfile = { 6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88 };
+        private static readonly double[] MinorProfile = { 6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17 };
+        private static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+
+        public static string KeyName(int root, bool minor) => NoteNames[((root % 12) + 12) % 12] + (minor ? " minor" : " major");
+
+        /// <summary>
+        /// Pitch-class profile from an 8192-point FFT (~3 Hz bins at 24 kHz) over 80-2000 Hz, so bass
+        /// notes land in the right semitone. Separate from the onset pass, which needs short windows.
+        /// </summary>
+        private static double[] ComputeChroma(float[] x, int sr)
+        {
+            const int n = 8192;
+            const int hop = 4096;
+            var chroma = new double[12];
+            if (x.Length < n) return chroma;
+
+            float binHz = sr / (float)n;
+            int lo = Math.Max(1, (int)Math.Ceiling(80f / binHz));
+            int hi = Math.Min(n / 2, (int)Math.Floor(2000f / binHz));
+            var pitchClass = new int[n / 2 + 1];
+            for (int k = lo; k <= hi; k++)
+            {
+                int midi = (int)Math.Round(69.0 + 12.0 * Math.Log(k * binHz / 440.0, 2.0));
+                pitchClass[k] = ((midi % 12) + 12) % 12;
+            }
+
+            var window = new float[n];
+            for (int i = 0; i < n; i++) window[i] = 0.5f - 0.5f * (float)Math.Cos(2.0 * Math.PI * i / (n - 1));
+            var fft = new FFT(n);
+            var re = new float[n];
+            var im = new float[n];
+            for (int start = 0; start + n <= x.Length; start += hop)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    re[i] = x[start + i] * window[i];
+                    im[i] = 0f;
+                }
+                fft.Transform(re, im);
+                for (int k = lo; k <= hi; k++) chroma[pitchClass[k]] += Math.Sqrt(re[k] * re[k] + im[k] * im[k]);
+            }
+            return chroma;
+        }
+
+        /// <summary>Krumhansl-Schmuckler key estimate: correlate the song's pitch-class profile with every key.</summary>
+        private static void EstimateKey(double[] chroma, BeatAnalysis result)
+        {
+            double best = double.MinValue, second = double.MinValue;
+            for (int mode = 0; mode < 2; mode++)
+            {
+                double[] profile = mode == 0 ? MajorProfile : MinorProfile;
+                for (int root = 0; root < 12; root++)
+                {
+                    double r = Correlation(chroma, profile, root);
+                    if (r > best)
+                    {
+                        second = best;
+                        best = r;
+                        result.keyRoot = root;
+                        result.keyMinor = mode == 1;
+                    }
+                    else if (r > second)
+                    {
+                        second = r;
+                    }
+                }
+            }
+            result.keyConfidence = (float)(best - second);
+        }
+
+        private static double Correlation(double[] chroma, double[] profile, int root)
+        {
+            double ma = 0, mb = 0;
+            for (int i = 0; i < 12; i++)
+            {
+                ma += chroma[i];
+                mb += profile[i];
+            }
+            ma /= 12;
+            mb /= 12;
+            double num = 0, da = 0, db = 0;
+            for (int i = 0; i < 12; i++)
+            {
+                double a = chroma[(i + root) % 12] - ma;
+                double b = profile[i] - mb;
+                num += a * b;
+                da += a * a;
+                db += b * b;
+            }
+            return num / Math.Sqrt(Math.Max(1e-12, da * db));
         }
 
         // ------------------------------------------------------------------ helpers

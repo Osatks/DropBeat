@@ -36,6 +36,15 @@ namespace DropBeat.EditorTools
                 m.SetFloat("_Soft", 1f);
                 m.SetFloat("_SoftPower", 2f);
             });
+            Material chrome = MakeMaterial("Chrome", "DropBeat/Chrome", m => { });
+            Material ring = MakeMaterial("Ring", "DropBeat/Ring", m => { });
+            Material ring3d = MakeMaterial("Ring3D", "DropBeat/Ring3D", m => { });
+            Material backdrop = MakeMaterial("Backdrop", "DropBeat/Backdrop", m =>
+            {
+                m.SetVector("_SunCenter", new Vector4(8f, 11f, 0f, 0f)); // off-centre, clear of the combo counter
+                m.SetFloat("_SunRadius", 13f);
+                m.SetFloat("_SunIntensity", 0.24f);
+            });
             VolumeProfile profile = MakePostFx();
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -52,7 +61,7 @@ namespace DropBeat.EditorTools
             camGo.AddComponent<AudioListener>();
             var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
             camData.renderPostProcessing = true;
-            camData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            camData.antialiasing = AntialiasingMode.FastApproximateAntialiasing; // cheap on phones
             var rig = camGo.AddComponent<CameraRig>();
             camGo.transform.position = new Vector3(0f, 4f, -13f);
 
@@ -77,17 +86,19 @@ namespace DropBeat.EditorTools
 
             var rings = new GameObject("Rings");
 
-            // Ball
+            // Ball: Ball -> Squash (stretch) -> Body (chrome sphere that spins)
             var ballGo = new GameObject("Ball");
             var ball = ballGo.AddComponent<BallView>();
-            var body = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            body.name = "Body";
-            Object.DestroyImmediate(body.GetComponent<Collider>());
-            body.transform.SetParent(ballGo.transform, false);
-            body.transform.localScale = Vector3.one * 0.6f;
-            var bodyRenderer = body.GetComponent<MeshRenderer>();
-            bodyRenderer.sharedMaterial = neon;
+            var squash = new GameObject("Squash");
+            squash.transform.SetParent(ballGo.transform, false);
+            squash.transform.localScale = Vector3.one * 0.8f;
+            var body = new GameObject("Body");
+            body.transform.SetParent(squash.transform, false);
+            body.AddComponent<MeshFilter>().sharedMesh = SavedMesh("BallSphere", ProceduralMeshes.Sphere());
+            var bodyRenderer = body.AddComponent<MeshRenderer>();
+            bodyRenderer.sharedMaterial = chrome;
             bodyRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            bodyRenderer.receiveShadows = false;
 
             var glow = new GameObject("Glow");
             glow.transform.SetParent(ballGo.transform, false);
@@ -107,6 +118,7 @@ namespace DropBeat.EditorTools
             trail.shadowCastingMode = ShadowCastingMode.Off;
             trail.alignment = LineAlignment.View;
 
+            SetRef(ball, "squash", squash.transform);
             SetRef(ball, "body", bodyRenderer);
             SetRef(ball, "glow", glowRenderer);
             SetRef(ball, "trail", trail);
@@ -124,14 +136,52 @@ namespace DropBeat.EditorTools
             so.FindProperty("visuals.neon").objectReferenceValue = neon;
             so.FindProperty("visuals.additive").objectReferenceValue = additive;
             so.FindProperty("visuals.softAdditive").objectReferenceValue = soft;
+            so.FindProperty("visuals.backdrop").objectReferenceValue = backdrop;
+            so.FindProperty("visuals.ring").objectReferenceValue = ring;
+            so.FindProperty("visuals.ring3d").objectReferenceValue = ring3d;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             PlayerSettings.runInBackground = true;
             PlayerSettings.productName = "DropBeat";
+            ConfigureMobile();
             AssetDatabase.SaveAssets();
             Debug.Log("[DropBeat] Game scene built: " + ScenePath);
+        }
+
+        /// <summary>Portrait phone game: portrait orientation, lower-latency audio buffer.</summary>
+        private static void ConfigureMobile()
+        {
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+            PlayerSettings.allowedAutorotateToPortrait = true;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = true;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = false;
+            PlayerSettings.allowedAutorotateToLandscapeRight = false;
+
+            // "Good latency" DSP buffer (512): taps and hit sounds feel tighter than the 1024 default.
+            var audioManager = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/AudioManager.asset");
+            if (audioManager != null && audioManager.Length > 0)
+            {
+                var so = new SerializedObject(audioManager[0]);
+                var buffer = so.FindProperty("m_DSPBufferSize");
+                if (buffer != null && buffer.intValue != 512)
+                {
+                    buffer.intValue = 512;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                }
+            }
+        }
+
+        private static Mesh SavedMesh(string name, Mesh source)
+        {
+            string path = Root + "/Materials/" + name + ".asset";
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (mesh != null) return mesh;
+            mesh = Object.Instantiate(source);
+            mesh.name = name;
+            AssetDatabase.CreateAsset(mesh, path);
+            return mesh;
         }
 
         private static Mesh SavedQuad()
@@ -176,15 +226,16 @@ namespace DropBeat.EditorTools
             bloom.threshold.Override(1.0f);
             bloom.intensity.Override(1.1f);
             bloom.scatter.Override(0.72f);
-            bloom.highQualityFiltering.Override(true);
+            bloom.highQualityFiltering.Override(false); // mobile: bilinear upsampling
+            bloom.downscale.Override(BloomDownscaleMode.Half);
 
             Vignette vignette = Get<Vignette>(profile);
             vignette.intensity.Override(0.32f);
             vignette.smoothness.Override(0.45f);
             vignette.color.Override(new Color(0.05f, 0f, 0.1f));
 
-            ChromaticAberration ca = Get<ChromaticAberration>(profile);
-            ca.intensity.Override(0.08f);
+            // Chromatic aberration costs a full-screen pass on phones for very little; keep it off.
+            if (profile.TryGet(out ChromaticAberration ca)) ca.active = false;
 
             Tonemapping tone = Get<Tonemapping>(profile);
             tone.mode.Override(TonemappingMode.None);

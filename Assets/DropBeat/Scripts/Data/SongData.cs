@@ -43,12 +43,16 @@ namespace DropBeat
         public float[] beatTimes = Array.Empty<float>();
         public float[] beatStrength = Array.Empty<float>();
         public float[] kickStrength = Array.Empty<float>();
+        public float[] snareStrength = Array.Empty<float>();
         public float[] offStrength = Array.Empty<float>();
         public float[] loudness = Array.Empty<float>();
         public float phaseConfidence;
         public float driftMs;
         public bool driftCorrected;
         public float detectorBiasMs;
+        [Tooltip("Detected key root, 0 = C .. 11 = B. Hit sounds are tuned to it.")]
+        public int keyRoot = 9;
+        public bool keyMinor = true;
         [TextArea(3, 10)] public string analysisLog;
         public string analyzedAt;
         public int analyzedSampleRate;
@@ -65,12 +69,15 @@ namespace DropBeat
             beatTimes = a.beatTimes;
             beatStrength = a.beatStrength;
             kickStrength = a.kickStrength;
+            snareStrength = a.snareStrength;
             offStrength = a.offStrength;
             loudness = a.loudness;
             phaseConfidence = a.phaseConfidence;
             driftMs = a.driftMs;
             driftCorrected = a.driftCorrected;
             detectorBiasMs = a.detectorBiasMs;
+            keyRoot = a.keyRoot;
+            keyMinor = a.keyMinor;
             analysisLog = a.log;
             analyzedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
             analyzedSampleRate = sampleRate;

@@ -10,6 +10,9 @@ namespace DropBeat
         public Material neon;
         public Material additive;
         public Material softAdditive;
+        public Material backdrop;
+        public Material ring;
+        public Material ring3d;
 
         public static readonly int ColorId = Shader.PropertyToID("_Color");
         public static readonly int RimId = Shader.PropertyToID("_RimColor");

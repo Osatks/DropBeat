@@ -96,6 +96,8 @@ namespace DropBeat
         /// <summary>Per-song reset, after the layout and the HUD are set up.</summary>
         private void ResetFeel()
         {
+            _continueUsed = false;
+            _continueAdUp = false;
             _tier = 0;
             _tierVis = 0f;
             _pendingTier = 0;
@@ -500,6 +502,7 @@ namespace DropBeat
         {
             if (_song == null || Ads.Showing) return;
             SongData song = _song;
+            _challengeRun = false; // a challenge is played as set; Easy is a normal run
             Ads.BetweenSongs(() =>
             {
                 SelectDifficulty(Difficulty.Easy);

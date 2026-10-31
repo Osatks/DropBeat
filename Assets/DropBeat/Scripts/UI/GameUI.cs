@@ -324,13 +324,20 @@ namespace DropBeat
             var row = UIFactory.Rect(_sheet, "Row", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
             UIFactory.HStack(row, 20);
             UIFactory.Layout(row, 92);
-            UIFactory.Button(row, "Settings", UIFactory.Spaced("settings"), 26, () => ShowSettings(true), out _, UIFactory.ButtonStyle.Outline);
-            UIFactory.Button(row, "Style", UIFactory.Spaced("style"), 26, () => ShowStyle(true), out _, UIFactory.ButtonStyle.Outline);
-            UIFactory.Button(row, "Profile", UIFactory.Spaced("profile"), 26, () => ShowProfile(true), out _, UIFactory.ButtonStyle.Outline);
+            UIFactory.Button(row, "Settings", UIFactory.Spaced("settings"), 20, () => ShowSettings(true), out _, UIFactory.ButtonStyle.Outline);
+            UIFactory.Button(row, "Style", UIFactory.Spaced("style"), 20, () => ShowStyle(true), out _, UIFactory.ButtonStyle.Outline);
+            UIFactory.Button(row, "Profile", UIFactory.Spaced("profile"), 20, () => ShowProfile(true), out _, UIFactory.ButtonStyle.Outline);
+            UIFactory.Button(row, "Shop", UIFactory.Spaced("shop"), 20, () => ShowShop(true), out _, UIFactory.ButtonStyle.Outline);
+            var daily = UIFactory.Button(row, "Daily", UIFactory.Spaced("daily"), 20, () => ShowDaily(true), out _, UIFactory.ButtonStyle.Outline);
+            // Red dot: a reward, box, quest or challenge try is waiting.
+            _dailyDot = UIFactory.Rect(daily.transform, "Dot", new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-14, -12), new Vector2(26, 26));
+            UIFactory.Image(_dailyDot, UIFactory.Red, UIFactory.Circle);
 
             BuildSettings();
             BuildStyle();
             BuildProfile();
+            BuildDaily();
+            BuildShop();
         }
 
         private void BuildSongHero()
@@ -901,6 +908,9 @@ namespace DropBeat
             }
 
             RefreshLocker();
+            RefreshDaily();
+            RefreshDailyDot();
+            RefreshShop();
             SetToggle(_toggles[0], GameSettings.Autoplay);
             SetToggle(_toggles[1], GameSettings.AssistTick);
             SetToggle(_toggles[2], GameSettings.HitSound);
@@ -942,6 +952,8 @@ namespace DropBeat
                 _styleCard.anchoredPosition = new Vector2(0, Mathf.Lerp(-1600f, 0f, e));
             }
             AnimateProfile(time);
+            AnimateDaily(time);
+            AnimateShop(time);
         }
 
         private static Color Ldr(Color hdr)
@@ -1365,6 +1377,7 @@ namespace DropBeat
             UIFactory.Layout(UIFactory.Button(buttons, "Quit", UIFactory.Spaced("song select"), 28, () => _game.ToMenu(), out _, UIFactory.ButtonStyle.Outline), 84);
             _resumeCount = UIFactory.Label(UIFactory.At(_pause, "Count", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(600, 300)), "", 200, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIFactory.Gradient(_resumeCount, Color.white, UIFactory.Cyan, false);
+            BuildContinue();
         }
 
         public void SetResumeCountdown(string text)

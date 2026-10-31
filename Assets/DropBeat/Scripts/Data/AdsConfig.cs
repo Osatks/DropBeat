@@ -23,6 +23,9 @@ namespace DropBeat
         [Header("Rules")]
         [Tooltip("Show a full-screen ad after every Nth finished song (0 = never).")]
         [Min(0)] public int interstitialEvery = 3;
+        [Tooltip("Test the ad frequency: each new install gets one of the options below for good, sent to LevelPlay as its segment.")]
+        public bool abTestInterstitialEvery = true;
+        public int[] interstitialEveryOptions = { 2, 3, 4 };
         [Tooltip("In the editor, show a simulated test ad instead of a real one.")]
         public bool simulateInEditor = true;
         [Tooltip("Shows the 'Test mode (unlock all)' switch in Settings. Turn OFF before publishing.")]

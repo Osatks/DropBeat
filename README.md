@@ -79,6 +79,17 @@ Two can only be won:
 
 The results screen announces each one when you win it.
 
+### Daily
+
+**DAILY** in the menu (a red dot shows when something is waiting) gives players a reason to come back every day:
+
+- **Login streak:** a 7-day calendar of Beat Boxes that grows to a big day 7. One streak freeze saves a single missed day, and every full week earns it back.
+- **Daily challenge:** the same song, difficulty and accuracy goal for everyone that day, sometimes a locked song as a free try. It has 3 attempts, and up to 2 more for a rewarded ad each. Clearing it with the goal accuracy wins an epic box.
+- **Daily quests:** three a day (an easy, a medium and a hard one) such as "Hit 150 Perfects". Each pays a box, and finishing all three pays an epic box.
+- **Beat Boxes:** besides the streak and quests, every 4 cleared songs drop a box. A box rolls common, rare, epic or legendary, with a legendary guaranteed within 25 boxes. It gives XP and unlock steps toward a random locked ball, trail or song; a legendary unlocks it outright. Boxes are only earned by playing, never sold.
+
+Everything resets at local midnight. Normal songs stay unlimited.
+
 ### Profile
 
 **PROFILE** in the menu shows your level and title (from XP: 1 per 100 points scored, plus 50 per clear) and lifetime stats:
@@ -96,7 +107,22 @@ Unity LevelPlay (`com.unity.services.levelplay`): a full-screen ad after every t
 - If the full-screen ad isn't loaded when due, it shows after the next song instead of waiting 3 more.
 - **Test mode** (Settings, only while `allowTestMode` is on) unlocks everything for testing. Its skin and trail choice is saved separately, so turning it off returns your real equipment, and finished songs don't count toward the full-screen ad.
 
+- **Continue after losing:** when life runs out, the player gets one offer per run to watch a rewarded ad and carry on with half their life. The offer counts down 6 seconds and declines on its own.
+- **Ad frequency test:** each new install is put in one group for good: a full-screen ad every 2, 3 or 4 songs (`abTestInterstitialEvery` and `interstitialEveryOptions` in `AdsConfig`). The group is sent to LevelPlay as the user segment (`every2`, `every3`, `every4`), so its reports compare revenue per group. Turn the test off and set `interstitialEvery` to the winner once the numbers are clear.
+
 **Before release:** untick `allowTestMode` in `AdsConfig`, and replace the test app keys and ad unit IDs with your own from the LevelPlay dashboard.
+
+### Shop (in-app purchases)
+
+**SHOP** in the menu sells three one-time purchases through Unity IAP:
+
+| Product id | Planned price | What it does |
+| --- | --- | --- |
+| `dropbeat.removeads` | $2.99 | No more full-screen ads between songs. Rewarded ads stay, since the player chooses them. |
+| `dropbeat.allsongs` | $1.99 | Unlocks every locked song. |
+| `dropbeat.allstyles` | $2.99 | Unlocks every ball and trail that ads unlock (Champion and Aurora are still won by playing). |
+
+**Restore Purchases** brings them back on a new device; Apple requires it. Before release, create the three products with these exact ids as non-consumables in App Store Connect and the Google Play Console. The stores set the real prices; in the editor Unity IAP uses a fake store.
 
 Run **CALIBRATE** once per audio device (speakers and Bluetooth headphones differ a lot). After a song the results screen also suggests an offset if your taps were consistently early or late.
 

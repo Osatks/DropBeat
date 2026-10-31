@@ -291,22 +291,67 @@ namespace DropBeat
         }
 
         /// <summary>False for a locked song the player has not yet watched enough rewarded ads for.</summary>
-        public static bool IsUnlocked(SongData song) => song == null || !song.locked || TestMode || AdsWatched(SongKey(song)) >= SongAdsToUnlock;
+        public static bool IsUnlocked(SongData song) => song == null || !song.locked || TestMode || Owns(Purchases.AllSongs) || AdsWatched(SongKey(song)) >= SongAdsToUnlock;
         public static int AdsWatched(SongData song) => song == null ? 0 : Mathf.Min(SongAdsToUnlock, AdsWatched(SongKey(song)));
         public static int WatchedAdFor(SongData song) => song == null ? 0 : AddAdWatched(SongKey(song));
 
         public static bool IsUnlocked(BallSkin s) => TestMode || EarnedUnlock(s);
         /// <summary>Unlocked for real (test mode aside): free, earned by a clear, or paid for with ads.</summary>
         private static bool EarnedUnlock(BallSkin s) =>
-            s == BallSkin.Chrome || (IsClearReward(s) ? HardClearReward : AdsWatched(SkinKey(s)) >= CosmeticAdsToUnlock);
+            s == BallSkin.Chrome || (IsClearReward(s) ? HardClearReward : Owns(Purchases.AllStyles) || AdsWatched(SkinKey(s)) >= CosmeticAdsToUnlock);
         public static int AdsWatched(BallSkin s) => Mathf.Min(CosmeticAdsToUnlock, AdsWatched(SkinKey(s)));
         public static int WatchedAdFor(BallSkin s) => AddAdWatched(SkinKey(s));
 
         public static bool IsUnlocked(TrailEffect t) => TestMode || EarnedUnlock(t);
         private static bool EarnedUnlock(TrailEffect t) =>
-            t == TrailEffect.Classic || (IsClearReward(t) ? NormalClearReward : AdsWatched(TrailKey(t)) >= CosmeticAdsToUnlock);
+            t == TrailEffect.Classic || (IsClearReward(t) ? NormalClearReward : Owns(Purchases.AllStyles) || AdsWatched(TrailKey(t)) >= CosmeticAdsToUnlock);
         public static int AdsWatched(TrailEffect t) => Mathf.Min(CosmeticAdsToUnlock, AdsWatched(TrailKey(t)));
         public static int WatchedAdFor(TrailEffect t) => AddAdWatched(TrailKey(t));
+
+        // ------------------------------------------------------------------ purchases (Unity IAP)
+
+        public static bool Owns(string productId) => PlayerPrefs.GetInt("db.iap." + productId, 0) == 1;
+
+        public static void SetOwned(string productId)
+        {
+            PlayerPrefs.SetInt("db.iap." + productId, 1);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>Remove Ads: no more full-screen ads between songs (rewarded ads stay, the player picks them).</summary>
+        public static bool NoAds => Owns(Purchases.RemoveAds);
+
+        public static bool PaidAnything
+        {
+            get
+            {
+                foreach (string id in Purchases.All) if (Owns(id)) return true;
+                return false;
+            }
+        }
+
+        // ------------------------------------------------------------------ ad frequency test
+
+        /// <summary>
+        /// Songs between full-screen ads for this player. When the test is on, each new install is put in
+        /// one group (every 2, 3 or 4 songs) for good; the group is sent to LevelPlay as the user segment
+        /// ("every2" / "every3" / "every4"), so its reports compare revenue and retention per group.
+        /// </summary>
+        public static int InterstitialEvery
+        {
+            get
+            {
+                AdsConfig c = AdsConfig.Instance;
+                if (!c.abTestInterstitialEvery || c.interstitialEveryOptions == null || c.interstitialEveryOptions.Length == 0)
+                    return c.interstitialEvery;
+                if (!PlayerPrefs.HasKey("db.ab.every"))
+                {
+                    PlayerPrefs.SetInt("db.ab.every", c.interstitialEveryOptions[UnityEngine.Random.Range(0, c.interstitialEveryOptions.Length)]);
+                    PlayerPrefs.Save();
+                }
+                return Mathf.Max(1, PlayerPrefs.GetInt("db.ab.every", c.interstitialEvery));
+            }
+        }
 
         // ------------------------------------------------------------------ clear rewards (no ads)
 
@@ -348,11 +393,13 @@ namespace DropBeat
             public int perfect, great, good, miss;
             public long totalScore;
             public float playSeconds;
+            /// <summary>XP won from Beat Boxes.</summary>
+            public long bonusXp;
 
             public int Hits => perfect + great + good;
             public float Accuracy => Hits + miss > 0 ? (perfect + great * 0.7f + good * 0.4f) / (Hits + miss) : 0f;
-            /// <summary>Experience: 1 per 100 points scored, plus 50 per clear.</summary>
-            public long Xp => totalScore / 100 + clears * 50L;
+            /// <summary>Experience: 1 per 100 points scored, plus 50 per clear, plus XP from Beat Boxes.</summary>
+            public long Xp => totalScore / 100 + clears * 50L + bonusXp;
         }
 
         private const string StatKey = "db.stat.";
@@ -374,7 +421,8 @@ namespace DropBeat
                 miss = PlayerPrefs.GetInt(StatKey + "miss", 0),
                 // PlayerPrefs has no long: the lifetime score is stored as a string.
                 totalScore = long.TryParse(PlayerPrefs.GetString(StatKey + "score", "0"), out long ts) ? ts : 0L,
-                playSeconds = PlayerPrefs.GetFloat(StatKey + "time", 0f)
+                playSeconds = PlayerPrefs.GetFloat(StatKey + "time", 0f),
+                bonusXp = PlayerPrefs.GetInt(StatKey + "bonusXp", 0)
             };
         }
 
@@ -410,6 +458,57 @@ namespace DropBeat
             PlayerPrefs.SetString(StatKey + "score", st.totalScore.ToString(System.Globalization.CultureInfo.InvariantCulture));
             PlayerPrefs.SetFloat(StatKey + "time", st.playSeconds);
             PlayerPrefs.Save();
+        }
+
+        public static void AddBonusXp(int xp) => PlayerPrefs.SetInt(StatKey + "bonusXp", PlayerPrefs.GetInt(StatKey + "bonusXp", 0) + Mathf.Max(0, xp));
+
+        /// <summary>
+        /// Beat Box reward: <paramref name="steps"/> unlock steps (the same steps a rewarded ad gives) toward
+        /// one random locked ball, trail or song that ads can unlock; a big enough box unlocks it outright.
+        /// Clear rewards (Champion, Aurora) are never in boxes: those are won by playing.
+        /// </summary>
+        public static void GrantRandomUnlockProgress(int steps, ref BoxReward reward)
+        {
+            var keys = new System.Collections.Generic.List<string>();
+            var names = new System.Collections.Generic.List<string>();
+            var kinds = new System.Collections.Generic.List<string>();
+            var needs = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < BallStyles.SkinCount; i++)
+            {
+                var s = (BallSkin)i;
+                if (EarnedUnlock(s) || IsClearReward(s)) continue;
+                keys.Add(SkinKey(s)); names.Add(BallStyles.Name(s)); kinds.Add("ball"); needs.Add(CosmeticAdsToUnlock);
+            }
+            for (int i = 0; i < BallStyles.TrailCount; i++)
+            {
+                var t = (TrailEffect)i;
+                if (EarnedUnlock(t) || IsClearReward(t)) continue;
+                keys.Add(TrailKey(t)); names.Add(BallStyles.Name(t)); kinds.Add("trail"); needs.Add(CosmeticAdsToUnlock);
+            }
+            SongLibrary lib = Resources.Load<SongLibrary>("SongLibrary");
+            if (lib != null)
+            {
+                foreach (SongData song in lib.songs)
+                {
+                    if (song == null || !song.locked || AdsWatched(SongKey(song)) >= SongAdsToUnlock) continue;
+                    keys.Add(SongKey(song)); names.Add(song.title.ToUpperInvariant()); kinds.Add("song"); needs.Add(SongAdsToUnlock);
+                }
+            }
+            if (keys.Count == 0)
+            {
+                reward.item = string.Empty;
+                return;
+            }
+            int pick = UnityEngine.Random.Range(0, keys.Count);
+            int have = AdsWatched(keys[pick]);
+            int after = Mathf.Min(needs[pick], have + steps);
+            PlayerPrefs.SetInt("db.ads." + keys[pick], after);
+            reward.item = names[pick];
+            reward.itemKind = kinds[pick];
+            reward.progress = after - have;
+            reward.have = after;
+            reward.need = needs[pick];
+            reward.unlocked = after >= needs[pick];
         }
 
         /// <summary>Player level from experience: each level needs 250 XP more than the one before.</summary>

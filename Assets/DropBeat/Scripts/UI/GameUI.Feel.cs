@@ -67,7 +67,8 @@ namespace DropBeat
 
         /// <summary>True while the settings or style sheet covers the menu (menu hotkeys pause then).</summary>
         public bool SheetOpen => (_settings != null && _settings.gameObject.activeSelf) || (_style != null && _style.gameObject.activeSelf) ||
-                                 (_profile != null && _profile.gameObject.activeSelf);
+                                 (_profile != null && _profile.gameObject.activeSelf) || (_daily != null && _daily.gameObject.activeSelf) ||
+                                 (_shop != null && _shop.gameObject.activeSelf);
 
         /// <summary>True if a pointer at this screen position is on the calibration buttons.</summary>
         public bool IsOverCalibrationButtons(Vector2 screen)

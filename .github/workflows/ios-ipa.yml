@@ -39,6 +39,9 @@ jobs:
           # Zips made on Windows carry no execute bits.
           find . -name '*.sh' -exec chmod +x {} +
           chmod -R +x Il2CppOutputProject/IL2CPP/build
+          # The ads SDK ships frameworks built with the newest Swift: link with the newest Xcode installed.
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -n 1)
+          sudo xcode-select -s "$XCODE"
           xcodebuild -version
           # Ads (Unity LevelPlay) add native dependencies. The Windows editor can only write the Podfile;
           # install the pods here and build the workspace. Swift packages, if used instead, resolve on build.

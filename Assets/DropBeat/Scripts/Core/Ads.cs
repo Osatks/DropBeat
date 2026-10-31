@@ -51,6 +51,13 @@ namespace DropBeat
             _provider.Init(config);
         }
 
+        /// <summary>Tells the ad network this player's ad-frequency group and whether they paid (call after a purchase).</summary>
+        public static void RefreshSegment()
+        {
+            Init();
+            (_provider as LevelPlayAds)?.SetSegment(GameSettings.InterstitialEvery, GameSettings.PaidAnything);
+        }
+
         public static bool RewardedReady
         {
             get
@@ -73,9 +80,10 @@ namespace DropBeat
         public static void BetweenSongs(Action next)
         {
             Init();
-            int every = AdsConfig.Instance.interstitialEvery;
+            int every = GameSettings.InterstitialEvery;
             // Due from the Nth song on (not only on exact multiples), so an ad that was not ready is shown next time.
-            bool due = every > 0 && _songsFinished >= every && !GameSettings.TestMode;
+            // Remove Ads (purchase) turns these off; rewarded ads stay, since the player chooses them.
+            bool due = every > 0 && _songsFinished >= every && !GameSettings.TestMode && !GameSettings.NoAds;
             if (!due || !_provider.InterstitialReady)
             {
                 next();

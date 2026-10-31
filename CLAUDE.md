@@ -53,6 +53,33 @@ At runtime, `Gameplay/TwistDirector.cs` handles banners, camera roll, beat effec
 - `GameSettings.RecordRun` keeps the lifetime stats (`db.stat.*`; the total score is a string, since PlayerPrefs has no long). `GameController.FinishSong` calls it for every non-autoplay run.
 - `UI/GameUI.Profile.cs` has the profile sheet and the results reward card. The card sits inside the results card between the next-goal line and the buttons.
 
+**Daily loop:**
+- **Logic:** `Core/Daily.cs` holds the streak, challenge, quests and Beat Boxes, saved as `db.daily.*`.
+  - "Today" is days since 2026-01-01 in local time; `DebugDayOffset` shifts it for tests.
+  - The challenge and quests come from a hash of the day, so they're the same for everyone.
+- **Rewards:** a box rolls common 55%, rare 30%, epic 12% or legendary 3%. It never rolls below the box's minimum, and the 25th box since the last legendary is always legendary.
+  - `GameSettings.GrantRandomUnlockProgress` adds the steps to the same `db.ads.*` counters rewarded ads use. It skips clear rewards.
+  - Box XP is saved in `db.stat.bonusXp` and counts toward `Stats.Xp`.
+- **Game side:** `GameController.Daily.cs` has `PlayDailyChallenge` (uses an attempt and can play a locked song) and `BuyChallengeAttempt` (rewarded ad).
+  - `Retry` of a challenge run costs an attempt.
+  - `FinishSong` feeds every real run to `Daily.OnRunFinished`; the results screen shows what it earned as a toast.
+- **UI:** `UI/GameUI.Daily.cs` has the DAILY sheet, the box-opening overlay and the menu's red dot (`Daily.HasSomethingWaiting`).
+- **Testing:** these write PlayerPrefs. Back up `db.ads.*` and `db.stat.bonusXp` first, and delete `db.daily.*` afterwards.
+
+**Money (continue, shop, ad frequency):**
+- **Continue:** `GameController.Continue.cs`.
+  - When life hits zero, `OfferContinue` pauses the clock and enters `State.ContinueOffer`. It only offers once per run, never in autoplay or No Fail, and only when a rewarded ad is ready.
+  - Accepting calls `ScoreState.Revive(0.5)` and resumes through the pause screen's 3-2-1. Declining (or the 6 s timeout) resumes the audio and runs the usual `BeginFail`.
+  - The card is in `GameUI.Shop.cs` and shows on the pause screen.
+- **Purchases:** `Core/Purchases.cs` (Unity IAP 5.4.4) uses `UnityIAPServices.StoreController()`.
+  - It grants on `OnPurchasePending`, then confirms. Ownership is saved as `db.iap.<id>` (`GameSettings.Owns`).
+  - `NoAds` skips interstitials in `Ads.BetweenSongs`. All Songs and All Styles are checked in `IsUnlocked` and `EarnedUnlock`.
+  - A purchase the store never answers stops blocking new ones after 30 s.
+  - The editor's fake store can pop up a Buy/Cancel dialog that MCP can't click, so a test purchase may hang until play mode stops.
+- **Ad frequency:** `GameSettings.InterstitialEvery` picks one of `AdsConfig.interstitialEveryOptions` per install (`db.ab.every`).
+  - `LevelPlayAds.SetSegment` sends it as the segment name with `IsPaying`. `Ads.RefreshSegment` re-sends it after a purchase.
+- **Testing:** runs played without autoplay write real stats, records and daily progress to PlayerPrefs. Delete `db.iap.*` after testing purchases.
+
 **Slide Rush (Overtime):**
 - `NoteFx.Slide` with `fxFrom` (where the ring waits), `fxSettle` (when it has landed, before its beat) and `fxLead` (when the slide starts, one beat earlier).
 - Rings land as their approach circle starts (`LevelLayout.ApproachTime`). After `OvertimeRushStart` they land halfway through it.
@@ -182,6 +209,8 @@ Unity on Windows only exports the Xcode project. The `.ipa` is compiled by `.git
 2. Zip the folder's contents as `Builds/DropBeat-iOS-xcode.zip`, then upload it: `gh release upload ios-xcode Builds/DropBeat-iOS-xcode.zip --clobber`.
 3. Push the commit to the `ios-build` branch, or run the workflow by hand.
    - The workflow runs `pod install` (the LevelPlay ads SDK), builds without code signing, and removes UnityRuntime's stale `_CodeSignature`. Without that step, iOS refuses the install with error 0xe8008001.
+   - It switches to the newest Xcode on the runner. IronSource 9.7's frameworks need a newer Swift runtime than Xcode 16.4 links (`_swift_coroFrameAlloc` undefined).
+   - The workflow file on `ios-build` is what runs; keep it in sync with the one on `redesign`. An empty commit pushed to `ios-build` triggers a build.
    - It attaches `DropBeat.ipa` to the release and to the run.
 4. Install with Sideloadly. With a free Apple ID, re-install every 7 days.
 
@@ -192,6 +221,7 @@ Unity on Windows only exports the Xcode project. The `.ipa` is compiled by `.git
 ## Before release
 
 - Untick `allowTestMode` in `Resources/AdsConfig.asset`.
+- Create the IAP products (`dropbeat.removeads`, `dropbeat.allsongs`, `dropbeat.allstyles`, non-consumable) in App Store Connect and the Play Console, and link the Unity project to a Unity Gaming Services project (IAP warns without it).
 - Replace the LevelPlay test app keys and ad unit IDs with your own.
 - Listen to the hit sounds on a real iPhone. Levels were only checked in the editor.
 

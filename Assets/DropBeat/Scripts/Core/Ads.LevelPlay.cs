@@ -31,7 +31,16 @@ namespace DropBeat
             LevelPlay.OnInitSuccess += _ => CreateAds(config);
             LevelPlay.OnInitFailed += error => Debug.LogWarning("[DropBeat] LevelPlay init failed: " + error);
             LevelPlay.Init(config.AppKey);
+            SetSegment(GameSettings.InterstitialEvery, GameSettings.PaidAnything);
             Ticker.Create(Tick);
+        }
+
+        /// <summary>The user segment: the ad-frequency group (for comparing revenue and retention per group) and paying status.</summary>
+        public void SetSegment(int every, bool paying)
+        {
+            var segment = new LevelPlaySegment { SegmentName = "every" + every, IsPaying = paying ? 1 : 0 };
+            segment.SetCustom("adEvery", every.ToString());
+            LevelPlay.SetSegment(segment);
         }
 
         private void CreateAds(AdsConfig config)

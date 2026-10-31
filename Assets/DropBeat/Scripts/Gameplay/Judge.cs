@@ -59,6 +59,9 @@ namespace DropBeat
         public int Good { get; private set; }
         public int Miss { get; private set; }
         public float Health { get; private set; } = 1f;
+
+        /// <summary>Continue after failing: back to at least <paramref name="health"/> life.</summary>
+        public void Revive(float health) => Health = Mathf.Max(Health, Mathf.Clamp01(health));
         public int TotalNotes { get; private set; }
         public int Judged => Perfect + Great + Good + Miss;
 

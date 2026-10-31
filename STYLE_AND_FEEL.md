@@ -130,6 +130,29 @@ All of these fire on the same frame as the judgement (`GameController`, in the h
   - Losing a big streak: a deeper muffle (900 Hz for 1 s), a stronger shake and a COMBO BREAK banner.
   - After three fails in a row the game offers the song on Easy.
 
+## The daily loop (why players come back)
+
+The daily loop gives players reasons to return without punishing them for missing a day:
+- **Something new each day:** a daily challenge, three quests and the next streak day.
+- **Variable rewards:** Beat Boxes roll common, rare, epic or legendary.
+- **Visible progress:** box meters, quest bars and unlock counts such as "3/10".
+
+It follows a few rules:
+- **Never block play.** Only the daily challenge has attempts; every other song is unlimited, so ad income and fun aren't capped.
+- **Forgive.** One streak freeze saves a missed day, and a full week earns it back. Losing a long streak to one bad day drives players away.
+- **Earned, never sold.** Boxes come only from playing. They give XP and steps toward cosmetics and songs that can also be unlocked with ads; clear rewards (Champion, Aurora) are never in boxes. There is no paid gambling.
+- **Make the open a moment.** The box shakes harder and faster on rising notes, with its glow flickering through every rarity before it settles. The reveal scales with rarity: epic and legendary get light rays and a fanfare.
+- **Always show the next step:** "Clear 2 more songs for the next box", "Legendary guaranteed within 18 boxes", the countdown to midnight, and the red dot on DAILY.
+- **A taste of what's locked:** the daily challenge can be a locked song, played for free that day.
+
+## Money without spoiling the game
+
+- **The player chooses the rewarded ads:** an extra challenge try, a step toward an unlock, one continue per run. They are never forced.
+- **Continue once per run.** The offer shows how far the player got ("You reached 72%") and counts down 6 seconds, so declining needs no tap. Accepting gives a 3-2-1 before the song resumes.
+- **Remove Ads removes only the forced ads.** Full-screen ads between songs stop; rewarded ads stay, because the player picks them.
+- **Paid packs skip the wait; they don't sell power.** All Songs and All Styles unlock what ads or play already unlock. Champion and Aurora can only be won.
+- **Test the ad frequency on real players** (every 2, 3 or 4 songs) instead of guessing, and keep the group that earns most without losing players.
+
 ## Song twists
 
 Every song has one trick that makes it feel different. A twist must:

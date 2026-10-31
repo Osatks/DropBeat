@@ -18,7 +18,7 @@ namespace DropBeat
     [DisallowMultipleComponent]
     public sealed partial class GameController : MonoBehaviour
     {
-        public enum State { Menu, Playing, Paused, Resuming, Failing, Results, Calibrating }
+        public enum State { Menu, Playing, Paused, Resuming, Failing, Results, Calibrating, ContinueOffer }
 
         [Header("Content")]
         [SerializeField] private SongLibrary library;
@@ -164,6 +164,8 @@ namespace DropBeat
         private void Start()
         {
             Ads.Init();
+            Purchases.Init();
+            Purchases.Changed += OnPurchasesChanged;
             GameSettings.SyncClearRewards(library);
             ball.SetSkin(GameSettings.BallSkin);
             ball.SetTrailEffect(GameSettings.Trail, visuals);
@@ -276,6 +278,7 @@ namespace DropBeat
         private void OnDestroy()
         {
             Ads.ShowingChanged -= OnAdShowing;
+            Purchases.Changed -= OnPurchasesChanged;
             _input?.Dispose();
             GameSettings.Save();
         }
@@ -438,6 +441,7 @@ namespace DropBeat
                 return;
             }
 
+            _challengeRun = false;
             StartSong(s, SelectedDifficulty, GameSettings.Autoplay);
         }
 
@@ -451,7 +455,7 @@ namespace DropBeat
 
         public void Retry()
         {
-            if (_song == null || Ads.Showing) return;
+            if (_song == null || Ads.Showing || !ChallengeRetryAllowed()) return;
             if (_state == State.Results) Ads.BetweenSongs(() => StartSong(_song, _difficulty, _autoplay));
             else StartSong(_song, _difficulty, _autoplay);
         }
@@ -578,6 +582,7 @@ namespace DropBeat
                 case State.Paused: _input.Clear(); break;
                 case State.Resuming: TickResuming(); break;
                 case State.Failing: TickFailing(); break;
+                case State.ContinueOffer: TickContinueOffer(); break;
                 case State.Results: TickResults(); break;
                 case State.Calibrating: TickCalibration(); break;
             }
@@ -610,6 +615,10 @@ namespace DropBeat
                     break;
                 case State.Calibrating:
                     if (kb.escapeKey.wasPressedThisFrame) CancelCalibration();
+                    break;
+                case State.ContinueOffer:
+                    if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame) AcceptContinue();
+                    if (kb.escapeKey.wasPressedThisFrame) DeclineContinue();
                     break;
             }
         }
@@ -698,7 +707,7 @@ namespace DropBeat
             if (_score.Health <= 0f) _healthHitZero = true;
             if (!_autoplay && !GameSettings.NoFail && _score.Health <= 0f)
             {
-                BeginFail();
+                if (!OfferContinue()) BeginFail();
                 return;
             }
 
@@ -1416,6 +1425,8 @@ namespace DropBeat
             }
         }
 
+        private System.Collections.Generic.List<string> _dailyNews;
+
         private void FinishSong(bool failed)
         {
             _state = State.Results;
@@ -1449,13 +1460,16 @@ namespace DropBeat
             {
                 record = GameSettings.SubmitRun(_song, _difficulty, _score, rank, cleared, progress);
                 GameSettings.RecordRun(_score, cleared, progress * _song.duration, bossDefeated);
+                _dailyNews = Daily.OnRunFinished(_score, _difficulty, cleared, _challengeRun);
             }
+            else _dailyNews = null;
             _resultsStartVolume = clock.Music.volume;
 
             _score.ErrorStats(out float mean, out float std, out float median);
             bool suggest = !_autoplay && _score.Errors.Count >= 20 && Mathf.Abs(median) >= 8f && std < 45f;
             _suggestedOffsetMs = Mathf.Round(median);
             ui.ShowResults(_song, _difficulty, _score, failed, _autoplay, record, progress, _suggestedOffsetMs, suggest);
+            if (_dailyNews != null && _dailyNews.Count > 0) ui.ShowDailyNews(_dailyNews);
             Ads.SongFinished();
 
             Debug.Log("[DropBeat] Result " + _song.title + " " + _difficulty + (_autoplay ? " (auto)" : string.Empty) +

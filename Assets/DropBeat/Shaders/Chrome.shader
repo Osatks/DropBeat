@@ -213,6 +213,23 @@ Shader "DropBeat/Chrome"
                     col = lerp(col, float3(0.9, 0.92, 1.0) * light * 1.4, cloud * 0.8);
                     col += float3(0.25, 0.55, 1.6) * pow(1.0 - ndv, 3.0) * 1.2;
                 }
+                else if (skin == 10)
+                {
+                    // Champion (first Hard clear): a cut diamond. Facets reflect the studio, each one throws
+                    // its own rainbow fire that shifts with the view and the spin, and gold seams glow.
+                    float3 qn = normalize(round(no * 3.0));
+                    float3 fn = normalize(TransformObjectToWorldNormal(qn));
+                    float facet = Hash3(round(no * 3.0) + 11.0);
+                    float h = frac(facet + dot(fn, v) * 0.6 + t * 0.08);
+                    float3 fire = saturate(abs(frac(h + float3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0);
+                    col = Metal(fn, v, float3(0.75, 0.78, 0.85), _Exposure) * 0.85;
+                    col += fire * (0.35 + 0.9 * pow(saturate(dot(fn, v)), 3.0));
+                    col += fire * rim * 0.8;
+                    float sparkle = step(0.97, Hash3(floor(float3(facet * 50.0, floor(t * 6.0), 0.0))));
+                    col += float3(2.5, 2.5, 2.6) * sparkle * saturate(dot(fn, v));
+                    float seam = Seams(no, w, groove);
+                    col += float3(2.4, 1.6, 0.35) * seam * (0.8 + 0.4 * sin(t * 3.0));
+                }
                 else
                 {
                     // Metals: chrome (0), gold (1), black chrome (2), rose gold (3). Tint comes from _BaseColor.

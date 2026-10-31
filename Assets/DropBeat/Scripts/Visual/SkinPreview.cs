@@ -3,14 +3,14 @@ using UnityEngine;
 namespace DropBeat
 {
     /// <summary>
-    /// Renders every ball skin, slowly spinning, into one RenderTexture (a 5 x 2 grid) for the locker
+    /// Renders every ball skin, slowly spinning, into one RenderTexture (a 5 x 3 grid) for the locker
     /// panel's tiles. The preview spheres and camera sit far below the level on their own layer, and
     /// the camera only renders while the panel is open, so it costs nothing during play.
     /// </summary>
     public sealed class SkinPreview : MonoBehaviour
     {
         public const int Layer = 30;
-        private const int Columns = 5, Rows = 2;
+        private const int Columns = 5, Rows = 3;
         private const int CellPixels = 256;
         private const float CellWorld = 1.25f;
         private static readonly Vector3 Origin = new Vector3(0f, -5000f, 0f);

@@ -66,7 +66,8 @@ namespace DropBeat
         }
 
         /// <summary>True while the settings or style sheet covers the menu (menu hotkeys pause then).</summary>
-        public bool SheetOpen => (_settings != null && _settings.gameObject.activeSelf) || (_style != null && _style.gameObject.activeSelf);
+        public bool SheetOpen => (_settings != null && _settings.gameObject.activeSelf) || (_style != null && _style.gameObject.activeSelf) ||
+                                 (_profile != null && _profile.gameObject.activeSelf);
 
         /// <summary>True if a pointer at this screen position is on the calibration buttons.</summary>
         public bool IsOverCalibrationButtons(Vector2 screen)
@@ -540,6 +541,7 @@ namespace DropBeat
             _resTryEasy = UIFactory.Button(_resPanel, "TryEasy", UIFactory.Spaced("try easy"), 22, () => _game.TryEasy(), out _, UIFactory.ButtonStyle.Outline);
             Place((RectTransform)_resTryEasy.transform, new Vector2(0.5f, 0), new Vector2(0, 128), new Vector2(320, 54));
             _resTryEasy.gameObject.SetActive(false);
+            BuildRewardCard();
         }
 
         public void ShowResults(SongData song, Difficulty d, ScoreState s, bool failed, bool autoplay, GameSettings.RunRecord rec, float progress,
@@ -596,6 +598,7 @@ namespace DropBeat
             _resApplyText.text = "APPLY OFFSET " + (GameSettings.OffsetMs + suggestedOffsetMs).ToString("+0;-0;0", CultureInfo.InvariantCulture) + " MS";
             _resTryEasy.gameObject.SetActive(failed && !autoplay && !canSuggest && d != Difficulty.Easy && rec.after.failRun >= 3);
 
+            SetupRewardCard(autoplay ? default : rec);
             _resT0 = Time.unscaledTime;
             _resFired = 0;
             _resSkipped = false;
@@ -791,6 +794,7 @@ namespace DropBeat
             }
 
             if (Fire(7, age, 2.7f) && !_rAuto) _resGoal.text = NextGoal();
+            AnimateRewardCard(age, quiet);
             TickConfetti();
         }
 

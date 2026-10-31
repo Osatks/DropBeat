@@ -164,6 +164,7 @@ namespace DropBeat
         private void Start()
         {
             Ads.Init();
+            GameSettings.SyncClearRewards(library);
             ball.SetSkin(GameSettings.BallSkin);
             ball.SetTrailEffect(GameSettings.Trail, visuals);
             EnterMenu();
@@ -185,6 +186,12 @@ namespace DropBeat
                 sfx.PlayNow(sfx.UiClick, 0.6f);
                 return;
             }
+            if (GameSettings.IsClearReward(skin))
+            {
+                ui.ShowToast("CLEAR ANY SONG ON HARD TO WIN IT");
+                sfx.PlayNow(sfx.UiClick, 0.6f);
+                return;
+            }
             WatchAdToward(() => GameSettings.WatchedAdFor(skin) >= GameSettings.CosmeticAdsToUnlock, () => EquipSkin(skin));
         }
 
@@ -195,6 +202,12 @@ namespace DropBeat
             if (GameSettings.IsUnlocked(trail))
             {
                 EquipTrail(trail);
+                sfx.PlayNow(sfx.UiClick, 0.6f);
+                return;
+            }
+            if (GameSettings.IsClearReward(trail))
+            {
+                ui.ShowToast("CLEAR ANY SONG ON NORMAL TO WIN IT");
                 sfx.PlayNow(sfx.UiClick, 0.6f);
                 return;
             }
@@ -510,7 +523,7 @@ namespace DropBeat
             _state = State.Playing;
             ui.Show(GameUI.Screen.Hud);
             ui.SetupHud(song, difficulty, autoplay);
-            _twists.Begin(song, _chart, _layout, ui, cameraRig, background, sfx);
+            _twists.Begin(song, _chart, _layout, ui, cameraRig, background, sfx, visuals, transform);
             background.SetPlaying(true);
             ResetFeel();
 
@@ -1182,7 +1195,7 @@ namespace DropBeat
             _impactFx.Tick(t, cameraRig.transform);
 
             BindRings(t);
-            double approach = Mathf.Clamp(_song.SecondsPerBeat * 2f, 0.55f, 1.1f);
+            double approach = LevelLayout.ApproachTime(_song.SecondsPerBeat);
             for (int i = 0; i < _ringPool.Count; i++)
             {
                 RingView v = _ringPool[i];
@@ -1198,7 +1211,10 @@ namespace DropBeat
             Vector3 target2 = pos;
             if (_nextJudge < _layout.Notes.Count) target2 = Vector3.Lerp(pos, _layout.Notes[_nextJudge].position, 0.35f);
             cameraRig.SetCrowd(_ballFor.Count > 0 ? 1f : 0f);
-            cameraRig.Follow(new Vector3(target2.x * 0.35f * (1f - cameraRig.Crowd), target2.y + 0.5f, 0f), 0.22f);
+            Vector3 focus = new Vector3(target2.x * 0.35f * (1f - cameraRig.Crowd), target2.y + 0.5f, 0f);
+            float framed = _twists.CameraFocus(t, out Vector3 arena); // the boss arena is framed whole
+            if (framed > 0f) focus = Vector3.Lerp(focus, arena, framed);
+            cameraRig.Follow(focus, 0.22f);
             background.Tick(_song, t, pos, Fever);
         }
 
@@ -1403,6 +1419,7 @@ namespace DropBeat
         private void FinishSong(bool failed)
         {
             _state = State.Results;
+            bool bossDefeated = _twists.BossDefeated;
             _twists.End();
             _resultsFade = 0f;
             _impactFx.Clear();
@@ -1428,7 +1445,11 @@ namespace DropBeat
             record.after = record.before;
             bool cleared = !failed && !_healthHitZero;
             float progress = failed ? _failProgress : 1f;
-            if (!_autoplay) record = GameSettings.SubmitRun(_song, _difficulty, _score, rank, cleared, progress);
+            if (!_autoplay)
+            {
+                record = GameSettings.SubmitRun(_song, _difficulty, _score, rank, cleared, progress);
+                GameSettings.RecordRun(_score, cleared, progress * _song.duration, bossDefeated);
+            }
             _resultsStartVolume = clock.Music.volume;
 
             _score.ErrorStats(out float mean, out float std, out float median);

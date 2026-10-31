@@ -111,6 +111,8 @@ namespace DropBeat
             public Best before, after;
             public bool firstClear, newScore, newAccuracy, newRank, newCombo, newFullCombo, newProgress;
             public int newStars;
+            /// <summary>This run unlocked a clear reward: the Champion ball (first Hard clear), the Aurora trail (first Normal or Hard clear).</summary>
+            public bool unlockedSkin, unlockedTrail;
         }
 
         private static string BestKey(SongData song, Difficulty d) => "db.best." + song.name + "." + (int)d;
@@ -173,6 +175,16 @@ namespace DropBeat
                 rec.newProgress = progress > before.progress + 1e-4f;
                 b.progress = Mathf.Max(b.progress, progress);
             }
+            if (cleared && d == Difficulty.Hard && !HardClearReward)
+            {
+                HardClearReward = true;
+                rec.unlockedSkin = true;
+            }
+            if (cleared && d != Difficulty.Easy && !NormalClearReward)
+            {
+                NormalClearReward = true;
+                rec.unlockedTrail = true;
+            }
             int earned = cleared ? StarClear | (s.FullCombo ? StarFullCombo : 0) | (s.Accuracy >= 0.9f ? StarRankA : 0) : 0;
             b.stars |= earned;
             rec.newStars = earned & ~before.stars;
@@ -222,7 +234,7 @@ namespace DropBeat
             set
             {
                 if (TestMode) PlayerPrefs.SetInt("db.ballSkin.test", (int)value);
-                if (!TestMode || value == BallSkin.Chrome || AdsWatched(SkinKey(value)) >= CosmeticAdsToUnlock) PlayerPrefs.SetInt("db.ballSkin", (int)value);
+                if (!TestMode || EarnedUnlock(value)) PlayerPrefs.SetInt("db.ballSkin", (int)value);
             }
         }
 
@@ -238,7 +250,7 @@ namespace DropBeat
             set
             {
                 if (TestMode) PlayerPrefs.SetInt("db.trail.test", (int)value);
-                if (!TestMode || value == TrailEffect.Classic || AdsWatched(TrailKey(value)) >= CosmeticAdsToUnlock) PlayerPrefs.SetInt("db.trail", (int)value);
+                if (!TestMode || EarnedUnlock(value)) PlayerPrefs.SetInt("db.trail", (int)value);
             }
         }
 
@@ -283,13 +295,146 @@ namespace DropBeat
         public static int AdsWatched(SongData song) => song == null ? 0 : Mathf.Min(SongAdsToUnlock, AdsWatched(SongKey(song)));
         public static int WatchedAdFor(SongData song) => song == null ? 0 : AddAdWatched(SongKey(song));
 
-        public static bool IsUnlocked(BallSkin s) => s == BallSkin.Chrome || TestMode || AdsWatched(SkinKey(s)) >= CosmeticAdsToUnlock;
+        public static bool IsUnlocked(BallSkin s) => TestMode || EarnedUnlock(s);
+        /// <summary>Unlocked for real (test mode aside): free, earned by a clear, or paid for with ads.</summary>
+        private static bool EarnedUnlock(BallSkin s) =>
+            s == BallSkin.Chrome || (IsClearReward(s) ? HardClearReward : AdsWatched(SkinKey(s)) >= CosmeticAdsToUnlock);
         public static int AdsWatched(BallSkin s) => Mathf.Min(CosmeticAdsToUnlock, AdsWatched(SkinKey(s)));
         public static int WatchedAdFor(BallSkin s) => AddAdWatched(SkinKey(s));
 
-        public static bool IsUnlocked(TrailEffect t) => t == TrailEffect.Classic || TestMode || AdsWatched(TrailKey(t)) >= CosmeticAdsToUnlock;
+        public static bool IsUnlocked(TrailEffect t) => TestMode || EarnedUnlock(t);
+        private static bool EarnedUnlock(TrailEffect t) =>
+            t == TrailEffect.Classic || (IsClearReward(t) ? NormalClearReward : AdsWatched(TrailKey(t)) >= CosmeticAdsToUnlock);
         public static int AdsWatched(TrailEffect t) => Mathf.Min(CosmeticAdsToUnlock, AdsWatched(TrailKey(t)));
         public static int WatchedAdFor(TrailEffect t) => AddAdWatched(TrailKey(t));
+
+        // ------------------------------------------------------------------ clear rewards (no ads)
+
+        /// <summary>The Champion ball is won by clearing any song on Hard; ads can't buy it.</summary>
+        public static bool IsClearReward(BallSkin s) => s == BallSkin.Champion;
+        /// <summary>The Aurora trail is won by clearing any song on Normal (or Hard).</summary>
+        public static bool IsClearReward(TrailEffect t) => t == TrailEffect.Aurora;
+
+        public static bool HardClearReward
+        {
+            get => PlayerPrefs.GetInt("db.reward.hard", 0) == 1;
+            private set => PlayerPrefs.SetInt("db.reward.hard", value ? 1 : 0);
+        }
+
+        public static bool NormalClearReward
+        {
+            get => PlayerPrefs.GetInt("db.reward.normal", 0) == 1;
+            private set => PlayerPrefs.SetInt("db.reward.normal", value ? 1 : 0);
+        }
+
+        /// <summary>Grants the clear rewards to players who cleared songs before the rewards existed.</summary>
+        public static void SyncClearRewards(SongLibrary library)
+        {
+            if (library == null) return;
+            foreach (SongData s in library.songs)
+            {
+                if (s == null) continue;
+                if (GetBest(s, Difficulty.Hard).clears > 0) HardClearReward = NormalClearReward = true;
+                if (GetBest(s, Difficulty.Normal).clears > 0) NormalClearReward = true;
+            }
+        }
+
+        // ------------------------------------------------------------------ lifetime stats (profile)
+
+        /// <summary>Lifetime totals over every real run (autoplay never counts).</summary>
+        public struct Stats
+        {
+            public int runs, clears, fails, fullCombos, allPerfects, bestCombo, bossesDefeated;
+            public int perfect, great, good, miss;
+            public long totalScore;
+            public float playSeconds;
+
+            public int Hits => perfect + great + good;
+            public float Accuracy => Hits + miss > 0 ? (perfect + great * 0.7f + good * 0.4f) / (Hits + miss) : 0f;
+            /// <summary>Experience: 1 per 100 points scored, plus 50 per clear.</summary>
+            public long Xp => totalScore / 100 + clears * 50L;
+        }
+
+        private const string StatKey = "db.stat.";
+
+        public static Stats GetStats()
+        {
+            return new Stats
+            {
+                runs = PlayerPrefs.GetInt(StatKey + "runs", 0),
+                clears = PlayerPrefs.GetInt(StatKey + "clears", 0),
+                fails = PlayerPrefs.GetInt(StatKey + "fails", 0),
+                fullCombos = PlayerPrefs.GetInt(StatKey + "fc", 0),
+                allPerfects = PlayerPrefs.GetInt(StatKey + "ap", 0),
+                bestCombo = PlayerPrefs.GetInt(StatKey + "bestCombo", 0),
+                bossesDefeated = PlayerPrefs.GetInt(StatKey + "boss", 0),
+                perfect = PlayerPrefs.GetInt(StatKey + "perfect", 0),
+                great = PlayerPrefs.GetInt(StatKey + "great", 0),
+                good = PlayerPrefs.GetInt(StatKey + "good", 0),
+                miss = PlayerPrefs.GetInt(StatKey + "miss", 0),
+                // PlayerPrefs has no long: the lifetime score is stored as a string.
+                totalScore = long.TryParse(PlayerPrefs.GetString(StatKey + "score", "0"), out long ts) ? ts : 0L,
+                playSeconds = PlayerPrefs.GetFloat(StatKey + "time", 0f)
+            };
+        }
+
+        /// <summary>Adds a finished run (cleared or failed) to the lifetime stats.</summary>
+        public static void RecordRun(ScoreState s, bool cleared, float seconds, bool bossDefeated)
+        {
+            Stats st = GetStats();
+            st.runs++;
+            if (cleared) st.clears++;
+            else st.fails++;
+            if (cleared && s.FullCombo) st.fullCombos++;
+            if (cleared && s.TotalNotes > 0 && s.Perfect == s.TotalNotes) st.allPerfects++;
+            if (bossDefeated) st.bossesDefeated++;
+            st.bestCombo = Mathf.Max(st.bestCombo, s.MaxCombo);
+            st.perfect += s.Perfect;
+            st.great += s.Great;
+            st.good += s.Good;
+            st.miss += s.Miss;
+            st.totalScore += s.Score;
+            st.playSeconds += Mathf.Max(0f, seconds);
+
+            PlayerPrefs.SetInt(StatKey + "runs", st.runs);
+            PlayerPrefs.SetInt(StatKey + "clears", st.clears);
+            PlayerPrefs.SetInt(StatKey + "fails", st.fails);
+            PlayerPrefs.SetInt(StatKey + "fc", st.fullCombos);
+            PlayerPrefs.SetInt(StatKey + "ap", st.allPerfects);
+            PlayerPrefs.SetInt(StatKey + "bestCombo", st.bestCombo);
+            PlayerPrefs.SetInt(StatKey + "boss", st.bossesDefeated);
+            PlayerPrefs.SetInt(StatKey + "perfect", st.perfect);
+            PlayerPrefs.SetInt(StatKey + "great", st.great);
+            PlayerPrefs.SetInt(StatKey + "good", st.good);
+            PlayerPrefs.SetInt(StatKey + "miss", st.miss);
+            PlayerPrefs.SetString(StatKey + "score", st.totalScore.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            PlayerPrefs.SetFloat(StatKey + "time", st.playSeconds);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>Player level from experience: each level needs 250 XP more than the one before.</summary>
+        public static int Level(long xp, out float progress)
+        {
+            int level = 1;
+            long need = 250, left = xp;
+            while (left >= need && level < 99)
+            {
+                left -= need;
+                level++;
+                need += 250;
+            }
+            progress = level >= 99 ? 1f : left / (float)need;
+            return level;
+        }
+
+        public static string LevelTitle(int level)
+        {
+            if (level >= 30) return "LEGEND";
+            if (level >= 20) return "BEAT MASTER";
+            if (level >= 12) return "RHYTHM ACE";
+            if (level >= 6) return "GROOVER";
+            return "ROOKIE";
+        }
 
         public static void Save() => PlayerPrefs.Save();
     }

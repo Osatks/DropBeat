@@ -45,23 +45,25 @@ Hit sounds are synthesized in the song's key (with a per-song override in `Tools
 
 ### Songs
 
-15 songs, each with its own background scene, colour palette and hit instrument (`Tools/themes.json`, applied with **DropBeat > Apply Song Themes**). The first six are free; the rest are unlocked by watching one rewarded ad each (kept forever).
+15 songs, each with its own background scene, colour palette, hit instrument, music loudness (`gainDb`) and optional hit key (`hitKey`), all in `Tools/themes.json` and applied with **DropBeat > Apply Song Themes**. The first six are free; each of the rest is unlocked by watching 5 rewarded ads (progress and unlocks are kept forever).
+
+Every song uses the same designed ring map on every play (`MapDesigner` + `ChartDesigner`, deterministic, no randomness), and every song has one twist (`SongTwists`, run by `TwistDirector`). A twist is only active inside its spans (`Chart.twistSpans`), built from the song's 8-bar phrases.
 
 | Song | Style | BPM | Scene | Hit sound | | Twist |
 | --- | --- | --- | --- | --- | --- | --- |
 | Neon Orbit Run | synthwave | 128 | synthwave sun | classic pluck | free | Golden Rings: gold rings score x5 |
-| Overtime | drum & bass | 172 | synthwave sun | classic pluck | free | Overtime: finale x2, misses hurt x2 |
+| Overtime | drum & bass | 172 | synthwave sun | classic pluck | free | Slide Rush: rings slide in from the sides and the top, faster in the last stretch |
 | Solar Drift | outrun synthwave | 112 | outrun mountains | analog pluck | free | Drift: the world banks into turns |
 | Glacier Bloom | melodic house | 122 | aurora over ice | glass bell | free | Ice Slide: every ring glides |
 | Voltage Run | drum & bass | 174 | city skyline | zap | free | Voltage Surge: rings rush in |
-| 8-Bit Hero | NES chiptune | 160 | pixel sky | chip blip | free | Boss Fight: beat the boss in the finale |
+| 8-Bit Hero | NES chiptune | 160 | pixel sky | chip blip | free | Boss Fight: a pixel boss in the finale with four attacks (orbit, barrage, sweep, spiral); every hit blasts it |
 | Jade Temple | koto electronica | 105 | misty mountains | koto | ad | Spirit Balls: extra balls from the first beat |
 | Pixel Arcade | chiptune EDM | 150 | pixel sky | chip blip | ad | Gravity Flip: screen turns upside down |
 | Desert Mirage | Arabic deep house | 120 | desert dunes | darbuka | ad | Mirage: rings slide in from the mirrored side |
 | Deep Ocean | deep house | 122 | underwater | sonar ping | ad | Sonar: rings hide until the ping |
 | Sakura Funk | future funk | 118 | petals | chime | ad | Petal Fall: rings float down |
 | Thunder Forge | industrial EDM | 140 | volcano | anvil | ad | Anvil Strikes: every other bar is a big hit |
-| Cosmic Trance | uplifting trance | 138 | galaxy | supersaw stab | ad | Warp Tunnel: corkscrew through the tunnel |
+| Cosmic Trance | uplifting trance | 138 | galaxy | supersaw stab | ad | Warp Tunnel: corkscrew through the tunnel (taps only while it spins) |
 | Jungle Pulse | afro house | 124 | jungle | marimba | ad | Stampede: double-time drum runs |
 | Midnight Disco | nu-disco | 116 | disco ball | clav | ad | Dance Cam: camera cuts every bar |
 
@@ -69,11 +71,32 @@ The 12 newer songs except 8-Bit Hero were generated with ElevenLabs Music (`Tool
 
 ### Style
 
-**STYLE** in the menu picks a ball skin (chrome, gold, black chrome, rose gold, plasma, lava, disco, pixel, neon wire, planet) and a trail (classic, rainbow, comet, sparkle, pixel, electric, ghost). The menu ball previews the choice live.
+**STYLE** in the menu (the locker) picks a ball skin (chrome, gold, black chrome, rose gold, plasma, lava, disco, pixel, neon wire, planet, champion) and a trail (classic, rainbow, comet, sparkle, pixel, electric, ghost, aurora). The menu ball previews the choice live. Chrome and Classic are free; most other skins and trails take 10 rewarded ads.
+
+Two can only be won:
+- **Aurora** trail: clear any song on Normal or Hard.
+- **Champion** ball: clear any song on Hard.
+
+The results screen announces each one when you win it.
+
+### Profile
+
+**PROFILE** in the menu shows your level and title (from XP: 1 per 100 points scored, plus 50 per clear) and lifetime stats:
+- songs played, clears, full combos and all-perfect runs
+- best combo, accuracy, perfect hits and total score
+- stars, play time, bosses beaten and songs unlocked
+
+It also shows the two clear rewards and how to win them. Autoplay runs never count.
 
 ### Ads
 
-Unity LevelPlay (`com.unity.services.levelplay`): a full-screen ad after every third finished song, and rewarded ads to unlock songs. Keys and ad unit IDs live in `Assets/DropBeat/Resources/AdsConfig.asset`; it ships with Unity's public LevelPlay test IDs (test ads only). Create your app in the LevelPlay dashboard and replace them before release. In the editor a simulated "TEST AD" screen stands in for real ads.
+Unity LevelPlay (`com.unity.services.levelplay`): a full-screen ad after every third finished song (`interstitialEvery`), and rewarded ads to unlock songs (5 each) and styles (10 each). Keys and ad unit IDs live in `Assets/DropBeat/Resources/AdsConfig.asset`; it ships with Unity's public LevelPlay test IDs (test ads only). In the editor a simulated "TEST AD" screen stands in for real ads.
+
+- A reward that arrives up to 1 s after the ad closes still counts; failed loads retry with backoff (5 to 60 s).
+- If the full-screen ad isn't loaded when due, it shows after the next song instead of waiting 3 more.
+- **Test mode** (Settings, only while `allowTestMode` is on) unlocks everything for testing. Its skin and trail choice is saved separately, so turning it off returns your real equipment, and finished songs don't count toward the full-screen ad.
+
+**Before release:** untick `allowTestMode` in `AdsConfig`, and replace the test app keys and ad unit IDs with your own from the LevelPlay dashboard.
 
 Run **CALIBRATE** once per audio device (speakers and Bluetooth headphones differ a lot). After a song the results screen also suggests an offset if your taps were consistently early or late.
 
@@ -125,13 +148,23 @@ Assets/DropBeat/
   Icons/            AppIcon.png
   Scripts/
     Analysis/       FFT, BeatAnalyzer
-    Data/           SongData, SongLibrary, ChartGenerator (beats to notes), ChartDesigner (elements + camera cues)
-    Core/           SongClock, TapInput, SfxPlayer, GameSettings
-    Gameplay/       GameController (state machine), LevelLayout, Judge/ScoreState
-    Visual/         RingView, BallView, CameraRig, BackgroundFX, HitBurst, ProceduralMeshes
-    UI/             GameUI (menu, HUD, pause, results, calibration), UIFactory (neon-glass kit)
+    Data/           SongData, SongLibrary, ChartGenerator (beats to notes), ChartDesigner (elements + camera cues),
+                    SongTwists (twist per song + TwistDesigner), AdsConfig
+    Core/           SongClock, TapInput, GameSettings (saves, unlocks, records), Ads + Ads.LevelPlay,
+                    SfxPlayer (+ .Voices hit instruments, .Stingers rewards), MixBus (duck + soft clip)
+    Gameplay/       GameController (state machine; .Feel = streak tiers, sections, finale), LevelLayout,
+                    MapDesigner (designed ring placement), TwistDirector, Judge/ScoreState
+    Visual/         RingView, BallView, BallStyles, SkinPreview, CameraRig, BackgroundFX, HitBurst, ImpactFX,
+                    ProceduralMeshes, VisualAssets
+    UI/             GameUI (menu, HUD, pause, results, calibration; .Feel = HUD extras, results reveal), UIFactory
     Debug/          TimingProbe (injects timed taps, dual presses and swipes to test judging)
-    Editor/         SongTools (analysis, validation, click preview), SceneBuilder
+    Editor/         SongTools (analysis, validation, click preview), SongThemes, SceneBuilder,
+                    IosBuildPostprocess (120 Hz), UnityRemoteTouchFix
+Tools/              generate_songs.py (ElevenLabs), make_chiptune.py, make_icon.py, songs.json, themes.json
 ```
+
+The song audio (`.mp3`/`.wav`) is stored with Git LFS.
+
+Developer notes (timing rules, testing through the Unity MCP, known pitfalls) are in [CLAUDE.md](CLAUDE.md). The visual style and the game-feel recipe are in [STYLE_AND_FEEL.md](STYLE_AND_FEEL.md).
 
 Rings, the ball trail, the grid and the UI are generated at runtime, so the scene file stays small. The old prototype's main scene was 150 MB because of ring meshes saved inside it.

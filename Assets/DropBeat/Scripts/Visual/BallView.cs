@@ -145,7 +145,7 @@ namespace DropBeat
             _flashTime = Time.time;
             _squashTime = Time.time;
             _squashAmount = strength;
-            if (_particles != null && (_effect == TrailEffect.Sparkle || _effect == TrailEffect.Comet || _effect == TrailEffect.Pixel))
+            if (_particles != null && (_effect == TrailEffect.Sparkle || _effect == TrailEffect.Comet || _effect == TrailEffect.Pixel || _effect == TrailEffect.Aurora))
             {
                 _particles.Emit(_effect == TrailEffect.Pixel ? 10 : 14); // a burst on every hit
             }
@@ -165,6 +165,7 @@ namespace DropBeat
                     case TrailEffect.Sparkle: return 0.2f;
                     case TrailEffect.Electric: return 0.3f;
                     case TrailEffect.Ghost: return 0.18f;
+                    case TrailEffect.Aurora: return 0.6f;
                     default: return 0.42f;
                 }
             }
@@ -210,6 +211,10 @@ namespace DropBeat
                         new[] { new GradientAlphaKey(0.7f, 0f), new GradientAlphaKey(0f, 1f) });
                     trail.time = 0.3f;
                     break;
+                case TrailEffect.Aurora:
+                    g = AuroraGradient(0f);
+                    trail.time = 0.6f;
+                    break;
                 default:
                     g.SetKeys(
                         new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.Lerp(Color.white, a, 0.5f), 0.25f), new GradientColorKey(new Color(0.9f, 0.2f, 0.9f), 1f) },
@@ -229,6 +234,9 @@ namespace DropBeat
                         break;
                     case TrailEffect.Pixel:
                         main.startColor = new ParticleSystem.MinMaxGradient(Ldr(_accent * 0.9f), Ldr(_accent2 * 0.9f)); // particle colours are 8-bit: keep hue
+                        break;
+                    case TrailEffect.Aurora:
+                        main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.3f, 1f, 0.6f, 1f), new Color(0.7f, 0.4f, 1f, 1f));
                         break;
                     default:
                         main.startColor = new ParticleSystem.MinMaxGradient(Color.white, Ldr(Color.Lerp(Color.white, _accent, 0.6f)));
@@ -259,6 +267,9 @@ namespace DropBeat
                     break;
                 case TrailEffect.Pixel:
                     MakeParticles(true, 0.5f, 0.1f, 0.2f, 9f, Vector2.zero);
+                    break;
+                case TrailEffect.Aurora:
+                    MakeParticles(false, 0.9f, 0.05f, 0.14f, 10f, new Vector2(0.05f, 0.3f));
                     break;
                 case TrailEffect.Electric:
                     if (_arc == null)
@@ -409,6 +420,33 @@ namespace DropBeat
             TickEffect();
         }
 
+        private static readonly Color[] AuroraColors =
+        {
+            new Color(0.25f, 1f, 0.55f), new Color(0.2f, 0.85f, 1f), new Color(0.55f, 0.35f, 1f), new Color(1f, 0.35f, 0.8f)
+        };
+        private Gradient _aurora;
+        private readonly GradientColorKey[] _auroraKeys = new GradientColorKey[5];
+        private static readonly GradientAlphaKey[] AuroraAlpha =
+        {
+            new GradientAlphaKey(0.85f, 0f), new GradientAlphaKey(0.6f, 0.45f), new GradientAlphaKey(0f, 1f)
+        };
+
+        /// <summary>The aurora ribbon: white at the ball, then green, cyan, violet and pink drifting by <paramref name="shift"/>.</summary>
+        private Gradient AuroraGradient(float shift)
+        {
+            if (_aurora == null) _aurora = new Gradient();
+            _auroraKeys[0] = new GradientColorKey(Color.white, 0f);
+            for (int i = 1; i < _auroraKeys.Length; i++)
+            {
+                float u = Mathf.Repeat((i - 1) / 4f + shift, 1f) * AuroraColors.Length;
+                int k = Mathf.FloorToInt(u) % AuroraColors.Length;
+                Color c = Color.Lerp(AuroraColors[k], AuroraColors[(k + 1) % AuroraColors.Length], u - Mathf.Floor(u));
+                _auroraKeys[i] = new GradientColorKey(c, 0.15f + 0.2125f * (i - 1));
+            }
+            _aurora.SetKeys(_auroraKeys, AuroraAlpha);
+            return _aurora;
+        }
+
         /// <summary>Metal tint (_BaseColor) of a skin; the non-metal skins ignore it.</summary>
         public static Color SkinTint(BallSkin skin)
         {
@@ -431,6 +469,11 @@ namespace DropBeat
             _history.Add((now, pos));
             while (_history.Count > 2 && now - _history[0].time > 0.4f) _history.RemoveAt(0);
 
+            if (_effect == TrailEffect.Aurora && trail != null)
+            {
+                // Northern lights: the ribbon's colours drift slowly along it.
+                trail.colorGradient = AuroraGradient(now * 0.12f);
+            }
             if (_effect == TrailEffect.Electric && _arc != null)
             {
                 // A jittering arc through the last 0.18 s of positions; the jitter re-rolls 25x a second.

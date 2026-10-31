@@ -192,7 +192,7 @@ namespace DropBeat
             _milestone.enabled = s != Screen.Pause;
             if (s == Screen.Menu) RefreshMenu();
             // The skin preview camera only renders while the locker is visible.
-            if (_preview != null) _preview.Active = s == Screen.Menu && _style.gameObject.activeSelf && !_styleTrails;
+            if (_preview != null) _preview.Active = s == Screen.Menu && ((_style.gameObject.activeSelf && !_styleTrails) || (_profile != null && _profile.gameObject.activeSelf));
             if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
         }
 
@@ -326,9 +326,11 @@ namespace DropBeat
             UIFactory.Layout(row, 92);
             UIFactory.Button(row, "Settings", UIFactory.Spaced("settings"), 26, () => ShowSettings(true), out _, UIFactory.ButtonStyle.Outline);
             UIFactory.Button(row, "Style", UIFactory.Spaced("style"), 26, () => ShowStyle(true), out _, UIFactory.ButtonStyle.Outline);
+            UIFactory.Button(row, "Profile", UIFactory.Spaced("profile"), 26, () => ShowProfile(true), out _, UIFactory.ButtonStyle.Outline);
 
             BuildSettings();
             BuildStyle();
+            BuildProfile();
         }
 
         private void BuildSongHero()
@@ -499,7 +501,8 @@ namespace DropBeat
             for (int i = 0; i < BallStyles.SkinCount; i++)
             {
                 var skin = (BallSkin)i;
-                var tile = MakeTile(_ballGrid, BallStyles.Name(skin), () => _game.SelectSkin(skin), GameSettings.CosmeticAdsToUnlock, out RectTransform area);
+                var tile = MakeTile(_ballGrid, BallStyles.Name(skin), () => _game.SelectSkin(skin),
+                    GameSettings.IsClearReward(skin) ? 0 : GameSettings.CosmeticAdsToUnlock, out RectTransform area);
                 if (_preview != null)
                 {
                     var raw = UIFactory.Rect(area, "Ball", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero).gameObject.AddComponent<RawImage>();
@@ -514,7 +517,8 @@ namespace DropBeat
             for (int i = 0; i < BallStyles.TrailCount; i++)
             {
                 var trail = (TrailEffect)i;
-                var tile = MakeTile(_trailGrid, BallStyles.Name(trail), () => _game.SelectTrail(trail), GameSettings.CosmeticAdsToUnlock, out RectTransform area);
+                var tile = MakeTile(_trailGrid, BallStyles.Name(trail), () => _game.SelectTrail(trail),
+                    GameSettings.IsClearReward(trail) ? 0 : GameSettings.CosmeticAdsToUnlock, out RectTransform area);
                 var icon = UIFactory.Rect(area, "Icon", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
                 var group = icon.gameObject.AddComponent<CanvasGroup>();
                 group.blocksRaycasts = false;
@@ -656,6 +660,25 @@ namespace DropBeat
                     }
                     break;
                 }
+                case TrailEffect.Aurora:
+                {
+                    // Bands of northern light: green, cyan, violet and pink ribbons, with a few stars.
+                    Color[] c = { new Color(1f, 0.35f, 0.8f), new Color(0.55f, 0.35f, 1f), new Color(0.2f, 0.85f, 1f), new Color(0.25f, 1f, 0.55f) };
+                    for (int i = 0; i < c.Length; i++)
+                    {
+                        var band = UIFactory.Rect(area, "Band" + i, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            new Vector2(-70 + i * 22, (i % 2 == 0 ? 6 : -6)), new Vector2(120, 40 - i * 4));
+                        UIFactory.Gradient(UIFactory.Image(band, Color.white, UIFactory.Pill), new Color(c[i].r, c[i].g, c[i].b, 0f), new Color(c[i].r, c[i].g, c[i].b, 0.75f), true);
+                    }
+                    float[,] stars = { { -86, 30, 8 }, { -40, -32, 6 }, { -8, 34, 7 } };
+                    for (int i = 0; i < stars.GetLength(0); i++)
+                    {
+                        var st = UIFactory.Rect(area, "Star" + i, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            new Vector2(stars[i, 0], stars[i, 1]), new Vector2(stars[i, 2], stars[i, 2]));
+                        UIFactory.Image(st, new Color(1f, 1f, 1f, 0.9f), UIFactory.Circle);
+                    }
+                    break;
+                }
                 case TrailEffect.Ghost:
                 {
                     for (int i = 3; i >= 0; i--)
@@ -702,20 +725,23 @@ namespace DropBeat
             bool test = GameSettings.TestMode;
             _styleInfo.text = test
                 ? UIFactory.Spaced("test mode: everything unlocked")
-                : UIFactory.Spaced("unlock each with " + GameSettings.CosmeticAdsToUnlock + " ads");
+                : UIFactory.Spaced("unlock each with " + GameSettings.CosmeticAdsToUnlock + " ads, or win it");
             for (int i = 0; i < _skinTiles.Count; i++)
             {
                 var skin = (BallSkin)i;
-                UpdateTile(_skinTiles[i], GameSettings.IsUnlocked(skin), GameSettings.BallSkin == skin, skin == BallSkin.Chrome, GameSettings.AdsWatched(skin));
+                UpdateTile(_skinTiles[i], GameSettings.IsUnlocked(skin), GameSettings.BallSkin == skin, skin == BallSkin.Chrome, GameSettings.AdsWatched(skin),
+                    GameSettings.IsClearReward(skin) ? "clear on hard" : null);
             }
             for (int i = 0; i < _trailTiles.Count; i++)
             {
                 var trail = (TrailEffect)i;
-                UpdateTile(_trailTiles[i], GameSettings.IsUnlocked(trail), GameSettings.Trail == trail, trail == TrailEffect.Classic, GameSettings.AdsWatched(trail));
+                UpdateTile(_trailTiles[i], GameSettings.IsUnlocked(trail), GameSettings.Trail == trail, trail == TrailEffect.Classic, GameSettings.AdsWatched(trail),
+                    GameSettings.IsClearReward(trail) ? "clear on normal" : null);
             }
         }
 
-        private static void UpdateTile(LockerTile tile, bool unlocked, bool equipped, bool free, int watched)
+        /// <param name="earnBy">For a clear reward (no ads): how to win it; null for items unlocked with ads.</param>
+        private static void UpdateTile(LockerTile tile, bool unlocked, bool equipped, bool free, int watched, string earnBy = null)
         {
             tile.bg.color = equipped ? new Color(0.25f, 0.75f, 1f, 1f) : UIFactory.GlassTint;
             if (tile.previewTint != null) tile.previewTint.color = unlocked ? Color.white : new Color(0.45f, 0.45f, 0.5f, 1f);
@@ -731,6 +757,11 @@ namespace DropBeat
             {
                 tile.status.text = UIFactory.Spaced(free ? "free" : "tap to equip");
                 tile.status.color = UIFactory.Cyan;
+            }
+            else if (earnBy != null)
+            {
+                tile.status.text = UIFactory.Spaced(earnBy);
+                tile.status.color = UIFactory.Pink;
             }
             else
             {
@@ -910,6 +941,7 @@ namespace DropBeat
                 float e = 1f - (1f - a) * (1f - a) * (1f - a);
                 _styleCard.anchoredPosition = new Vector2(0, Mathf.Lerp(-1600f, 0f, e));
             }
+            AnimateProfile(time);
         }
 
         private static Color Ldr(Color hdr)

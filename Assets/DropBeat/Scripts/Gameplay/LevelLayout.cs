@@ -33,6 +33,23 @@ namespace DropBeat
         public NoteFx fx;
         /// <summary>How long before its beat the fx motion runs.</summary>
         public double fxLead;
+        /// <summary>Slide: offset the ring waits at, and how long before its beat it has arrived.</summary>
+        public Vector3 fxFrom;
+        public double fxSettle;
+        /// <summary>Boss fight: which attack moves this ring (see <see cref="BossMove"/>).</summary>
+        public BossMove bossMove;
+        /// <summary>Orbit / spiral: the boss's centre, the ring's radius and landing angle (degrees) round it, and
+        /// the carousel speed (degrees per second; the ring comes from further round and turns back to its spot).</summary>
+        public Vector3 orbitCenter;
+        public float orbitRadius;
+        public float orbitAngle;
+        public float orbitSpeed;
+        /// <summary>Spiral: how fast the ring closes in on its radius (units per second).</summary>
+        public float spiralGrow;
+        /// <summary>Barrage / sweep: where the flight starts, how long it takes, and its curve (+1 / -1).</summary>
+        public Vector3 fxStart;
+        public double moveTime;
+        public float moveCurve = 1f;
 
         /// <summary>Where the ring is exactly on the beat (the ball lands here).</summary>
         public Vector3 position;
@@ -66,6 +83,23 @@ namespace DropBeat
                 float phase = (float)((t - time) / movePeriod) * Mathf.PI * 2f;
                 p += new Vector3(moveDir * 0.85f * Mathf.Sin(phase), 0.25f * Mathf.Sin(phase * 2f), 0f);
             }
+            if (fx == NoteFx.Boss && t < time) return BossPositionAt(time - t);
+            if (fx == NoteFx.Slide && t < time && fxLead > 0.0)
+            {
+                // Waits off screen, slides in over the beat before it arrives (fast, then easing in), then
+                // settles with a small bounce well before its own beat.
+                double dt = time - t;
+                if (dt >= fxLead) return p + fxFrom;
+                if (dt > fxSettle)
+                {
+                    float s = (float)((dt - fxSettle) / System.Math.Max(1e-3, fxLead - fxSettle));
+                    return p + fxFrom * (s * s * s);
+                }
+                float bounce = (float)System.Math.Min(0.25, fxSettle * 0.8);
+                float b = (float)((fxSettle - dt) / bounce);
+                if (b < 1f) p -= fxFrom.normalized * (0.28f * Mathf.Sin(b * Mathf.PI) * (1f - b));
+                return p;
+            }
             if (fx != NoteFx.None && t < time && fxLead > 0.0)
             {
                 // u: 1 at the start of the motion (or earlier), 0 on the beat, so the ring always ends on its spot.
@@ -86,9 +120,106 @@ namespace DropBeat
             }
             return p;
         }
+
+        /// <summary>
+        /// Boss rings, <paramref name="dt"/> seconds before their beat. Every attack ends exactly on the ring's
+        /// spot on its beat; before it shows (<see cref="fxLead"/>) the ring waits inside the boss or off screen.
+        /// </summary>
+        private Vector3 BossPositionAt(double dt)
+        {
+            double since = fxLead - dt; // time since the ring appeared
+            switch (bossMove)
+            {
+                case BossMove.Orbit:
+                {
+                    // Spirals out of the boss onto the carousel, which turns it back to its spot.
+                    if (since <= 0.0) return orbitCenter;
+                    float a = (orbitAngle + orbitSpeed * (float)dt) * Mathf.Deg2Rad;
+                    float r = orbitRadius * Mathf.Lerp(0.35f, 1f, Ease01(since / 0.35));
+                    return orbitCenter + new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * r;
+                }
+                case BossMove.Spiral:
+                {
+                    // Comes in from outside, turning the other way round the boss as it closes in.
+                    float d = (float)System.Math.Min(dt, fxLead);
+                    float a = (orbitAngle + orbitSpeed * d) * Mathf.Deg2Rad;
+                    float r = orbitRadius + spiralGrow * d;
+                    return orbitCenter + new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * r;
+                }
+                case BossMove.Barrage:
+                {
+                    // Fired out of the boss: a fast curved flight that eases onto its spot.
+                    if (since <= 0.0) return orbitCenter;
+                    float u = Mathf.Clamp01((float)(since / moveTime));
+                    float e = 1f - (1f - u) * (1f - u) * (1f - u);
+                    Vector3 d = position - orbitCenter;
+                    Vector3 side = new Vector3(-d.y, d.x, 0f).normalized * moveCurve;
+                    return Vector3.LerpUnclamped(orbitCenter, position, e) + side * (1.1f * Mathf.Sin(u * Mathf.PI) * (1f - u));
+                }
+                default:
+                {
+                    // Sweep: races in from the screen edge along its row, weaving, and brakes onto its spot.
+                    if (since <= 0.0) return fxStart;
+                    float u = Mathf.Clamp01((float)(since / moveTime));
+                    float e = 1f - (1f - u) * (1f - u) * (1f - u);
+                    return Vector3.LerpUnclamped(fxStart, position, e) + new Vector3(0f, 0.7f * moveCurve * Mathf.Sin(u * Mathf.PI * 2f) * (1f - u), 0f);
+                }
+            }
+        }
+
+        private static float Ease01(double x) => Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((float)x));
+
+        /// <summary>Boss rings: 0 while still inside the boss (or off screen), lighting up as they appear.</summary>
+        public float BossVisibility(double t)
+        {
+            if (fx != NoteFx.Boss || t >= time) return 1f;
+            double since = fxLead - (time - t);
+            switch (bossMove)
+            {
+                case BossMove.Spiral: return Ease01(since / 0.4);
+                case BossMove.Sweep: return Ease01(since / (moveTime * 0.3));
+                default: return Ease01(since / 0.35);
+            }
+        }
+
+        /// <summary>Slide rings: dark while waiting off screen (any camera view), lighting up as the slide starts.</summary>
+        public float SlideVisibility(double t)
+        {
+            if (fx != NoteFx.Slide || t >= time) return 1f;
+            double slide = System.Math.Max(1e-3, fxLead - fxSettle);
+            return Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((float)((fxLead - (time - t)) / (slide * 0.25))));
+        }
+
+        /// <summary>
+        /// Ring orientation at time t: carousel rings turn with it, fired and swept rings spin in flight; all
+        /// face their launch on the beat.
+        /// </summary>
+        public Quaternion FacingAt(double t)
+        {
+            if (fx != NoteFx.Boss || judged || t >= time) return facing;
+            double dt = time - t;
+            if (bossMove == BossMove.Orbit || bossMove == BossMove.Spiral)
+                return Quaternion.Euler(0f, 0f, orbitSpeed * (float)System.Math.Min(dt, fxLead)) * facing;
+            float u = Mathf.Clamp01((float)((fxLead - dt) / moveTime));
+            float left = (1f - u) * (1f - u) * (1f - u);
+            return Quaternion.Euler(0f, 0f, 540f * left * moveCurve) * facing;
+        }
     }
 
-    public enum NoteFx : byte { None, Mirage, Petal }
+    public enum NoteFx : byte { None, Mirage, Petal, Slide, Boss }
+
+    /// <summary>The boss's attacks; the arena switches attack every 4 bars.</summary>
+    public enum BossMove : byte
+    {
+        /// <summary>Rings spiral out of the boss and ride a carousel round it.</summary>
+        Orbit,
+        /// <summary>The boss fires each ring out to its spot on a curve; the ball zigzags across it.</summary>
+        Barrage,
+        /// <summary>Rings race in from the screen edges along rows above and below the boss.</summary>
+        Sweep,
+        /// <summary>Rings spiral in from outside, turning the other way; the ball circles clockwise.</summary>
+        Spiral
+    }
 
     /// <summary>A ball's route through time: a list of segments (arc, rail grind, dash).</summary>
     public sealed class BallPath
@@ -184,13 +315,33 @@ namespace DropBeat
         public float HalfWidth { get; private set; }
         public int JudgementCount { get; private set; }
 
+        /// <summary>Boss fight: the finale's rings are moved by the boss's attacks (see <see cref="BossMove"/>).</summary>
+        public bool HasBoss { get; private set; }
+        public Vector3 BossCenter { get; private set; }
+        public const float BossRadius = 3.2f;
+        /// <summary>Carousel speed: the rings turn back toward the ball at this many degrees per beat.</summary>
+        public const float BossOrbitPerBeat = 30f;
+        /// <summary>When each attack starts (the arena switches attack every 4 bars).</summary>
+        public readonly List<KeyValuePair<double, BossMove>> BossPhases = new List<KeyValuePair<double, BossMove>>();
+        private static readonly BossMove[] BossCycle = { BossMove.Orbit, BossMove.Barrage, BossMove.Sweep, BossMove.Spiral };
+        private int _bossBlock, _bossInBlock;
+        private float _sweepDir, _sweepRow;
+
         private SongData _song;
+
+        /// <summary>How long a ring's timing circle takes to close onto it (two beats, kept between 0.55 and 1.1 s).</summary>
+        public static double ApproachTime(float secondsPerBeat) => Mathf.Clamp(secondsPerBeat * 2f, 0.55f, 1.1f);
 
         public void Build(SongData song, Chart chart, float halfWidth, int seed)
         {
             _song = song;
             Notes.Clear();
             Paths.Clear();
+            HasBoss = false;
+            BossPhases.Clear();
+            _bossBlock = -1;
+            var bossRings = new List<PlayNote>();
+            double arenaStart = chart.twistSpans.Count > 0 ? chart.twistSpans[chart.twistSpans.Count - 1].start : 0.0;
             HalfWidth = Mathf.Max(1.8f, halfWidth);
             var src = chart.notes;
             if (src.Count == 0) return;
@@ -247,6 +398,31 @@ namespace DropBeat
                     c.swipe = SwipeDir.None;
                 }
                 float gap = (float)(c.time - prevTime);
+
+                if (chart.twist == SongTwist.BossFight && TwistDesigner.InSpans(chart.twistSpans, c.time))
+                {
+                    // Boss fight: the arena sits round the boss, just above the last ring of the climb.
+                    if (!HasBoss)
+                    {
+                        HasBoss = true;
+                        // The first ring sits straight below the boss; keep it a full ring gap from the last one.
+                        float up = Mathf.Max(1.3f, Mathf.Sqrt(Mathf.Max(0f, MinRingGap * MinRingGap - x * x - z * z)) + 0.05f);
+                        BossCenter = new Vector3(0f, y + BossRadius + up, 0f);
+                    }
+                    var bn = PlaceBossRing(c, gap, spb, arenaStart, new Vector3(x, y, z));
+                    Vector3 at = bn.position;
+                    bossRings.Add(bn);
+                    Notes.Add(bn);
+                    mainNotes.Add(bn);
+                    mainLanding.Add(at);
+                    mainLeave.Add(at);
+                    x = at.x;
+                    y = at.y;
+                    z = 0f;
+                    prevTime = c.time;
+                    continue;
+                }
+
                 float rise = Mathf.Clamp(0.7f + gap * 1.3f, 0.9f, 2.6f);
                 float prevX = x, prevZ = z;
 
@@ -332,6 +508,8 @@ namespace DropBeat
                 }
                 prevTime = c.time;
             }
+
+            TimeBossRings(bossRings, spb);
 
             // ---- main path
             var path = new BallPath { ball = 0, tint = song.accent };
@@ -420,7 +598,7 @@ namespace DropBeat
             // ---- ring facing: every ring is a launcher. Its axis is exactly the ball's launch direction,
             // so the ball always shoots out orthogonal to the ring's plane (in 3D as well).
             foreach (PlayNote n in Notes) n.facing = FacingFor(LaunchDirection(n));
-            TwistDesigner.Decorate(song, chart, Notes);
+            TwistDesigner.Decorate(song, chart, Notes, W);
 
             Notes.Sort((a, b) => a.time != b.time ? a.time.CompareTo(b.time) : ((int)a.side).CompareTo((int)b.side));
             int holds = 0;
@@ -430,6 +608,177 @@ namespace DropBeat
                 if (Notes[i].type == NoteType.Hold) holds++;
             }
             JudgementCount = Notes.Count + holds;
+        }
+
+        /// <summary>
+        /// One boss ring: which attack it belongs to (by its 4-bar block of the arena) and its landing spot.
+        /// Every spot keeps at least a ring gap from the previous one (<paramref name="prev"/>).
+        /// </summary>
+        private PlayNote PlaceBossRing(ChartNote c, float gap, float spb, double arenaStart, Vector3 prev)
+        {
+            int block = Mathf.Max(0, Mathf.FloorToInt((float)((c.time - arenaStart) / (spb * 16.0)) + 1e-3f));
+            BossMove move = BossCycle[block % BossCycle.Length];
+            Vector3 C = BossCenter;
+            Vector3 rel = prev - C;
+            if (block != _bossBlock)
+            {
+                _bossBlock = block;
+                _bossInBlock = 0;
+                BossPhases.Add(new KeyValuePair<double, BossMove>(arenaStart + block * 16.0 * spb, move));
+                // A sweep starts on the row nearest the ball and runs away from its side.
+                _sweepDir = prev.x > 0f ? -1f : 1f;
+                _sweepRow = rel.y > 0f ? 1f : -1f;
+            }
+            int k = _bossInBlock++;
+            float prevAngle = Mathf.Atan2(rel.y, rel.x) * Mathf.Rad2Deg;
+            float step = Mathf.Clamp(gap / spb * 40f, 40f, 70f);
+            Vector3 at = C;
+            float angle = 0f, radius = BossRadius, side = 1f, sweepFrom = 0f;
+            for (int attempt = 0; attempt < 24; attempt++)
+            {
+                switch (move)
+                {
+                    case BossMove.Orbit:
+                        // Anticlockwise round the boss.
+                        angle = prevAngle + step + attempt * 8f;
+                        at = C + Dir(angle) * radius;
+                        break;
+                    case BossMove.Spiral:
+                        // Clockwise, on a radius that breathes in and out.
+                        radius = 2.85f + 0.4f * Mathf.Sin((k + attempt) * 1.1f);
+                        angle = prevAngle - step - attempt * 8f;
+                        at = C + Dir(angle) * radius;
+                        break;
+                    case BossMove.Barrage:
+                    {
+                        // Left and right of the boss in turn (a quick double stays on its side), wandering up and down.
+                        bool quick = gap < spb * 0.75f && Mathf.Abs(prev.x) > 0.3f;
+                        side = quick ? Mathf.Sign(prev.x) : (Mathf.Abs(prev.x) > 0.3f ? -Mathf.Sign(prev.x) : ((k & 1) == 0 ? 1f : -1f));
+                        float wy = quick ? rel.y + (rel.y > 0f ? -2f : 2f) : 2.3f * Mathf.Sin((k + attempt) * 0.9f);
+                        at = C + new Vector3(side * 2.6f, Mathf.Clamp(wy + attempt * 0.4f, -2.6f, 2.6f), 0f);
+                        break;
+                    }
+                    default:
+                    {
+                        // Rows below and above the boss, four spots each, crossing back the other way on the next row.
+                        int n = k + attempt;
+                        int pass = n / 4, i = n % 4;
+                        float dir = (pass & 1) == 0 ? _sweepDir : -_sweepDir;
+                        float row = (pass & 1) == 0 ? _sweepRow : -_sweepRow;
+                        int col = dir > 0f ? i : 3 - i;
+                        at = C + new Vector3(-2.7f + 1.8f * col, row * 3.1f, 0f);
+                        sweepFrom = dir; // it enters from the end of the row it is heading for
+                        if (attempt > 0 && (prev - at).magnitude >= MinRingGap + 0.05f) _bossInBlock += attempt;
+                        break;
+                    }
+                }
+                if ((prev - at).magnitude >= MinRingGap + 0.05f) break;
+            }
+
+            var bn = NewNote(c, at, c.impact ? 1.35f : c.kind == NoteKind.Offbeat ? 0.85f : 1.05f);
+            bn.moving = false;
+            bn.fx = NoteFx.Boss;
+            bn.bossMove = move;
+            bn.orbitCenter = C;
+            bn.orbitRadius = radius;
+            bn.orbitAngle = angle;
+            switch (move)
+            {
+                case BossMove.Orbit:
+                    bn.orbitSpeed = BossOrbitPerBeat / spb;
+                    break;
+                case BossMove.Spiral:
+                    bn.orbitSpeed = -BossOrbitPerBeat / spb;
+                    bn.spiralGrow = 0.6f / spb;
+                    break;
+                case BossMove.Barrage:
+                    bn.moveTime = spb;
+                    bn.moveCurve = side;
+                    break;
+                default:
+                    bn.moveTime = spb * 1.5;
+                    bn.moveCurve = (k & 1) == 0 ? 1f : -1f;
+                    bn.fxStart = new Vector3(sweepFrom * 7.5f, at.y, 0f);
+                    break;
+            }
+            return bn;
+        }
+
+        private static Vector3 Dir(float degrees)
+        {
+            float a = degrees * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+        }
+
+        /// <summary>
+        /// When each boss ring appears (<see cref="PlayNote.fxLead"/>): as early as possible (so the attack has
+        /// time to play out) without ever coming within a ring of another ring on screen. Fired and swept rings
+        /// launch on the half-beat grid, so the attacks themselves keep time.
+        /// </summary>
+        private static void TimeBossRings(List<PlayNote> rings, float spb)
+        {
+            const float Clearance = 1.75f;
+            var candidates = new List<double>(80);
+            for (int j = 0; j < rings.Count; j++)
+            {
+                PlayNote r = rings[j];
+                candidates.Clear();
+                if (r.bossMove == BossMove.Orbit || r.bossMove == BossMove.Spiral)
+                {
+                    double min = System.Math.Max(spb * (r.bossMove == BossMove.Spiral ? 1.0 : 0.75), 0.3);
+                    double max = r.bossMove == BossMove.Spiral ? 3.0 : 3.4;
+                    for (double l = max; l > min; l -= 0.05) candidates.Add(l);
+                    candidates.Add(min);
+                }
+                else
+                {
+                    double half = spb * 0.5;
+                    int nMax = (int)System.Math.Floor(3.0 / half);
+                    int nMin = (int)System.Math.Ceiling((r.moveTime + half) / half);
+                    for (int n = System.Math.Max(nMax, nMin); n >= nMin; n--) candidates.Add(n * half);
+                }
+
+                // The earliest clear lead wins; if none is clear, the one that keeps the rings furthest apart.
+                double best = candidates[candidates.Count - 1];
+                float bestGap = -1f;
+                foreach (double lead in candidates)
+                {
+                    r.fxLead = lead;
+                    float gap = ClosestApproach(rings, j, Clearance);
+                    if (gap >= Clearance)
+                    {
+                        best = lead;
+                        break;
+                    }
+                    if (gap > bestGap)
+                    {
+                        bestGap = gap;
+                        best = lead;
+                    }
+                }
+                r.fxLead = best;
+            }
+        }
+
+        /// <summary>Closest ring <paramref name="j"/> comes to an earlier boss ring while both show (stops early below <paramref name="enough"/>).</summary>
+        private static float ClosestApproach(List<PlayNote> rings, int j, float enough)
+        {
+            PlayNote r = rings[j];
+            float closest = float.MaxValue;
+            for (double t = r.time - r.fxLead; t < r.time; t += 0.03)
+            {
+                if (r.BossVisibility(t) < 0.3f) continue;
+                Vector3 p = r.PositionAt(t);
+                for (int i = j - 1; i >= 0; i--)
+                {
+                    PlayNote o = rings[i];
+                    if (t >= o.time) break; // earlier rings are already hit (rings are in time order)
+                    if (t < o.time - o.fxLead || o.BossVisibility(t) < 0.3f) continue;
+                    closest = Mathf.Min(closest, (o.PositionAt(t) - p).magnitude);
+                }
+                if (closest < enough * 0.5f) return closest;
+            }
+            return closest;
         }
 
         /// <summary>Depth of the zigzag toward / away from the camera while the camera is angled or in the tunnel.</summary>

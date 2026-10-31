@@ -12,7 +12,9 @@ namespace DropBeat
         Disco = 6,
         Pixel = 7,
         NeonWire = 8,
-        Planet = 9
+        Planet = 9,
+        /// <summary>Reward for the first Hard clear: a prismatic diamond with gold seams.</summary>
+        Champion = 10
     }
 
     /// <summary>What the ball leaves behind it.</summary>
@@ -24,13 +26,15 @@ namespace DropBeat
         Sparkle,
         Pixel,
         Electric,
-        Ghost
+        Ghost,
+        /// <summary>Reward for the first Normal clear: a wide, shimmering northern-lights ribbon.</summary>
+        Aurora
     }
 
     public static class BallStyles
     {
-        public const int SkinCount = 10;
-        public const int TrailCount = 7;
+        public const int SkinCount = 11;
+        public const int TrailCount = 8;
 
         public static string Name(BallSkin s)
         {
@@ -45,6 +49,7 @@ namespace DropBeat
                 case BallSkin.Pixel: return "PIXEL";
                 case BallSkin.NeonWire: return "NEON WIRE";
                 case BallSkin.Planet: return "PLANET";
+                case BallSkin.Champion: return "CHAMPION";
                 default: return "CHROME";
             }
         }
@@ -59,6 +64,7 @@ namespace DropBeat
                 case TrailEffect.Pixel: return "PIXEL";
                 case TrailEffect.Electric: return "ELECTRIC";
                 case TrailEffect.Ghost: return "GHOST";
+                case TrailEffect.Aurora: return "AURORA";
                 default: return "CLASSIC";
             }
         }

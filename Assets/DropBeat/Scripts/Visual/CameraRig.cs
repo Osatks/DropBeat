@@ -183,9 +183,13 @@ namespace DropBeat
             float scale = DistanceScale * (1f + 0.14f * Mathf.SmoothStep(0f, 1f, _crowd));
             _roll = Mathf.MoveTowardsAngle(_roll, TwistRoll, dt * 540f);
             float roll = _overdrive * 3.2f * Mathf.Sin(Time.unscaledTime * 2.1f) + _roll;
+            // A rolled portrait screen is narrow across the ring chain: spin around a lower point and
+            // pull back so the rings ahead stay on screen through the warp corkscrew.
+            float spin = Mathf.Abs(Mathf.Sin(_roll * Mathf.Deg2Rad));
+            float pull = 1f + 0.3f * spin;
             Quaternion rot = Quaternion.Euler(_pose.pitch, _pose.yaw, roll);
-            Vector3 target = _focus + new Vector3(0f, _pose.ahead * scale, 0f);
-            transform.position = target - rot * Vector3.forward * (_pose.distance * scale) + new Vector3(0f, _pose.lift * scale, 0f) + shake + PunchOffset();
+            Vector3 target = _focus + new Vector3(0f, _pose.ahead * scale - 2f * spin, 0f);
+            transform.position = target - rot * Vector3.forward * (_pose.distance * scale * pull) +new Vector3(0f, _pose.lift * scale, 0f) + shake + PunchOffset();
             transform.rotation = rot;
             Cam.fieldOfView = baseFov - _kick * 2.2f + _overdrive * 5f;
         }

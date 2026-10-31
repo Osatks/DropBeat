@@ -178,7 +178,16 @@ namespace DropBeat
         public void Tick(double songTime, double approachTime, bool isTarget, float fever, Vector3 mainBall)
         {
             if (_note == null) return;
-            if (_state == State.Live) transform.localPosition = _note.PositionAt(songTime);
+            if (_state == State.Live)
+            {
+                transform.localPosition = _note.PositionAt(songTime);
+                if (_note.fx == NoteFx.Boss)
+                {
+                    Quaternion q = _note.FacingAt(songTime);
+                    _bandT.localRotation = q;
+                    _bodyT.localRotation = q;
+                }
+            }
             switch (_state)
             {
                 case State.Live: TickLive(songTime, approachTime, isTarget, fever); break;
@@ -209,6 +218,20 @@ namespace DropBeat
             {
                 body.a *= 0.65f + 0.35f * Mathf.Sin((float)t * 31f + _note.index); // heat shimmer
             }
+            else if (_note.fx == NoteFx.Boss)
+            {
+                // Dark inside the boss (or off screen), lighting up as the boss's attack sends it in.
+                vis = _note.BossVisibility(t);
+                body *= vis;
+            }
+            else if (_note.fx == NoteFx.Slide)
+            {
+                // Dark until its slide starts, then a bright lock-in flash the moment it lands in its slot.
+                vis = _note.SlideVisibility(t);
+                body *= vis;
+                double since = t - (_note.time - _note.fxSettle);
+                if (since >= 0.0 && since < 0.3) body *= 1f + 1.4f * Mathf.Exp(-(float)since / 0.07f);
+            }
             Color fillColor = isTarget ? Color.Lerp(_base * 1.15f, _assets.perfect * 0.7f, closeness * closeness) : _base;
             SetRing(_body, body, fillColor, isTarget ? closeness : 0f, 0f, isTarget ? 0.6f + 0.4f * closeness : 0f, _segments, _thickness, spin, _arrow);
 
@@ -218,6 +241,7 @@ namespace DropBeat
                 float s = 1f + 1.6f * Mathf.Max(0f, u);
                 _approachT.localScale = Vector3.one * (QuadSize * s);
                 float a = Mathf.Clamp01(closeness * 1.5f) * (u < 0f ? 1f + u * 4f : 1f) * 0.8f;
+                if (_note.fx == NoteFx.Boss || _note.fx == NoteFx.Slide) a *= vis; // not before the ring shows
                 Color ac = Color.Lerp(_base, Color.white * 1.6f, closeness);
                 ac.a = a;
                 SetRing(_approach, ac, ac, 1f, 0f, 0f, 0f, 0.012f / s, 0f, Vector4.zero);

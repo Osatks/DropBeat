@@ -160,9 +160,6 @@ namespace DropBeat
             return hi <= lo ? 1f : Mathf.Clamp01((acc - lo) / (hi - lo));
         }
 
-        /// <summary>Extra damage on top of a miss (Overtime twist: misses hurt twice).</summary>
-        public void ExtraMissDamage() => Health = Mathf.Max(0f, Health - _missDamage);
-
         public string Rank(bool failed)
         {
             if (failed) return "F";

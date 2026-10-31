@@ -9,11 +9,11 @@ namespace DropBeat
     {
         None,
         GoldenRings,  // gold rings worth x5, collect them all
-        Overtime,     // the finale scores x2, misses hurt twice as much
+        Overtime,     // rings slide in from the sides and the top, faster in the last stretch
         Drift,        // the world banks into long turns
         IceSlide,     // every ring glides on ice
         Surge,        // voltage surges: rings arrive much faster
-        BossFight,    // the finale is a boss with a health bar
+        BossFight,    // the finale is a pixel boss: rings circle it, hits blast it
         SpiritBalls,  // extra balls from the very first beat
         Flip,         // the screen turns upside down
         Mirage,       // rings appear mirrored, then slide home
@@ -65,7 +65,7 @@ namespace DropBeat
             switch (t)
             {
                 case SongTwist.GoldenRings: return "GOLDEN RINGS";
-                case SongTwist.Overtime: return "OVERTIME";
+                case SongTwist.Overtime: return "SLIDE RUSH";
                 case SongTwist.Drift: return "DRIFT";
                 case SongTwist.IceSlide: return "ICE SLIDE";
                 case SongTwist.Surge: return "VOLTAGE SURGE";
@@ -88,11 +88,11 @@ namespace DropBeat
             switch (t)
             {
                 case SongTwist.GoldenRings: return "gold rings score x5";
-                case SongTwist.Overtime: return "finale x2, misses hurt x2";
+                case SongTwist.Overtime: return "rings slide in from the sides and top";
                 case SongTwist.Drift: return "the world banks into turns";
                 case SongTwist.IceSlide: return "every ring glides on ice";
                 case SongTwist.Surge: return "surges make rings rush in";
-                case SongTwist.BossFight: return "defeat the boss in the finale";
+                case SongTwist.BossFight: return "rings circle the boss: blast it";
                 case SongTwist.SpiritBalls: return "extra balls from the first beat";
                 case SongTwist.Flip: return "the screen turns upside down";
                 case SongTwist.Mirage: return "rings appear mirrored, then slide home";
@@ -250,11 +250,30 @@ namespace DropBeat
                     MarkGolden(song, chart);
                     break;
                 case SongTwist.Overtime:
-                    Finale(0.8f);
+                    // The first phrase plays it straight so the player finds the beat; then rings slide in.
+                    spans.Add(new TwistSpan { start = Math.Max(first, PhraseStart(1)), end = last + 1.0 });
                     break;
                 case SongTwist.BossFight:
+                {
                     Finale(0.72f);
+                    // The boss arena: the finale's rings circle the boss, so only the main ball plays (no
+                    // companions), only taps (the rings keep turning), and the camera holds the side view.
+                    TwistSpan arena = spans[spans.Count - 1];
+                    notes.RemoveAll(c => c.ball != 0 && c.time >= arena.start - spb * 2);
+                    TapsOnly(chart, spb);
+                    for (int i = 0; i < notes.Count; i++)
+                    {
+                        if (notes[i].time < arena.start || !notes[i].moving) continue;
+                        ChartNote c = notes[i];
+                        c.moving = false;
+                        notes[i] = c;
+                    }
+                    var cues = chart.cameraCues;
+                    cues.RemoveAll(c => c.time >= arena.start - spb * 4);
+                    cues.Add(new CameraCue { time = arena.start - spb * 4, mode = CameraMode.Side });
+                    cues.Sort((a, b) => a.time.CompareTo(b.time));
                     break;
+                }
                 case SongTwist.Drift:
                     AddPhrases(p => p > 0 && Pe(p) >= 0.35f);
                     break;
@@ -434,10 +453,35 @@ namespace DropBeat
         }
 
         /// <summary>Per-ring effects for the layout (after rings are placed).</summary>
-        public static void Decorate(SongData song, Chart chart, List<PlayNote> rings)
+        /// <summary>Boss rings cycle through an 8-bit palette round the circle.</summary>
+        private static readonly Color[] BossPalette =
+        {
+            new Color(2.8f, 0.45f, 0.3f, 1f),  // red
+            new Color(2.8f, 1.8f, 0.25f, 1f),  // gold
+            new Color(0.35f, 2.2f, 2.8f, 1f),  // cyan
+            new Color(2.4f, 0.45f, 2.6f, 1f),  // magenta
+            new Color(0.6f, 2.7f, 0.6f, 1f)    // green
+        };
+
+        /// <summary>
+        /// Overtime: from this time on (the phrase holding the chart's last 30%) the rings land later, halfway
+        /// through their timing circle instead of as it appears: the clock is running out.
+        /// </summary>
+        public static double OvertimeRushStart(SongData song, Chart chart)
+        {
+            var notes = chart.notes;
+            if (notes.Count == 0) return double.PositiveInfinity;
+            double t = notes[Mathf.Clamp((int)(notes.Count * 0.7f), 0, notes.Count - 1)].time;
+            int p = Mathf.FloorToInt((song.BeatIndexAt(t + 1e-4) - song.downbeatPhase) / (float)PhraseBeats);
+            return song.BeatTime(song.downbeatPhase + Math.Max(1, p) * PhraseBeats);
+        }
+
+        public static void Decorate(SongData song, Chart chart, List<PlayNote> rings, float halfWidth)
         {
             SongTwist twist = chart.twist;
             float spb = song.SecondsPerBeat;
+            double rush = twist == SongTwist.Overtime ? OvertimeRushStart(song, chart) : double.PositiveInfinity;
+            int orbit = 0;
             foreach (PlayNote n in rings)
             {
                 bool on = InSpans(chart.twistSpans, n.time);
@@ -449,8 +493,31 @@ namespace DropBeat
                         n.approachScale = 0.6f;
                         break;
                     case SongTwist.BossFight:
-                        n.twistTint = new Color(2.8f, 0.35f, 0.3f, 1f);
+                        if (n.fx == NoteFx.Boss) n.twistTint = BossPalette[orbit++ % BossPalette.Length];
                         break;
+                    case SongTwist.Overtime:
+                    {
+                        // Drum & bass, read from the drums: the big hits and the kick opening every other bar
+                        // drop in from the top; every other ring is swept in from its own side of the screen
+                        // like a snare (centre rings alternate sides by beat). Each slide takes one beat and
+                        // lands on a beat of the grid: as its timing circle appears, or (in the overtime
+                        // stretch) halfway through it, so the motion itself keeps time.
+                        if (n.ball != 0 || n.type == NoteType.Dual) break;
+                        int bar = (song.BeatIndexAt(n.time + 1e-4) - song.downbeatPhase) / 4;
+                        bool top = n.impact || (n.kind == NoteKind.Downbeat && (bar & 1) == 0);
+                        if (top) n.fxFrom = new Vector3(0f, 14f, 0f); // starts above the top of the screen
+                        else
+                        {
+                            float side = Mathf.Abs(n.position.x) > 0.3f ? Mathf.Sign(n.position.x)
+                                : (Mathf.RoundToInt((float)(n.time / spb)) & 1) == 0 ? 1f : -1f;
+                            n.fxFrom = new Vector3(side * (halfWidth + 6f) - n.position.x, 0.5f, 0f); // off the screen edge
+                        }
+                        n.fx = NoteFx.Slide;
+                        double approach = LevelLayout.ApproachTime(spb);
+                        n.fxSettle = n.time >= rush ? approach * 0.5 : approach;
+                        n.fxLead = n.fxSettle + spb;
+                        break;
+                    }
                     case SongTwist.Mirage:
                         if (n.ball == 0 && Mathf.Abs(n.position.x) > 0.4f)
                         {

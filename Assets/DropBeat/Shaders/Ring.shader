@@ -104,7 +104,9 @@ Shader "DropBeat/Ring"
                     float su = frac(u + _Spin) * _Segments;
                     float f = frac(su);
                     float g = (_Gap + burst * 0.5) * 0.5;
-                    float aaS = max(fwidth(su), 1e-4) * 1.2;
+                    // AA width from the position (su jumps where the angle wraps, so fwidth(su) would draw a seam there).
+                    float du = length(fwidth(p)) / (TAU * max(r, 1e-3));
+                    float aaS = max(du * _Segments, 1e-4) * 1.2;
                     seg = smoothstep(g - aaS, g + aaS, f) * smoothstep(g - aaS, g + aaS, 1.0 - f);
                 }
 

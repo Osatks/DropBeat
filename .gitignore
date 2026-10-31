@@ -116,3 +116,6 @@ InitTestScene*.unity*
 
 # DropBeat click-preview exports
 /[Vv]erification/
+
+# Python bytecode
+__pycache__/

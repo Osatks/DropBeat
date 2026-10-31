@@ -105,6 +105,7 @@ Shader "DropBeat/Ring3D"
                 float fade = 1.0 - burst * burst;
                 float intensity = _Color.a * fade;
                 float alpha = saturate(_Color.a * 1.8) * fade;
+                clip(alpha - 0.05); // a fading band must not keep writing depth over later glows and particles
                 return half4(col * intensity, alpha);
             }
             ENDHLSL

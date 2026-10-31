@@ -120,9 +120,84 @@ namespace DropBeat
 
         public void SetAccent(Color accent) => _accent = accent;
 
+        /// <summary>Applies a song's palette: accent, second colour, sky, sun and nebula.</summary>
+        public void SetTheme(SongData song)
+        {
+            if (song == null) return;
+            _accent = song.accent;
+            _accent2 = song.accent2;
+            _skyTop = song.skyTop;
+            _skyBottom = song.skyBottom;
+            _sunTop = song.sunTop;
+            _sunBottom = song.sunBottom;
+            _haze = song.haze;
+            _scene = song.scene;
+        }
+
+        private BackdropScene _scene;
+        private static readonly int SceneId = Shader.PropertyToID("_Scene");
+        private static readonly int Accent2Id = Shader.PropertyToID("_Accent2");
+
+        /// <summary>The world grid wall belongs to the synthwave look; other scenes keep it faint.</summary>
+        private float GridStrength
+        {
+            get
+            {
+                switch (_scene)
+                {
+                    case BackdropScene.Synthwave:
+                    case BackdropScene.Outrun:
+                        return 1f;
+                    case BackdropScene.Pixel:
+                        return 0.6f;
+                    case BackdropScene.Skyline:
+                        return 0.35f;
+                    default:
+                        return 0.18f;
+                }
+            }
+        }
+
+        private Color _accent2 = new Color(2.6f, 0.35f, 1.9f, 1f);
+        private Color _skyTop = new Color(0.045f, 0.012f, 0.085f, 1f);
+        private Color _skyBottom = new Color(0.008f, 0.006f, 0.025f, 1f);
+        private Color _sunTop = new Color(2.4f, 1.3f, 0.35f, 1f);
+        private Color _sunBottom = new Color(2.2f, 0.25f, 1.0f, 1f);
+        private Color _haze = new Color(0.4f, 0.05f, 0.45f, 1f);
+        private static readonly int SkyTopId = Shader.PropertyToID("_SkyTop");
+        private static readonly int SkyBottomId = Shader.PropertyToID("_SkyBottom");
+        private static readonly int SunTopId = Shader.PropertyToID("_SunTop");
+        private static readonly int SunBottomId = Shader.PropertyToID("_SunBottom");
+        private static readonly int HazeId = Shader.PropertyToID("_Haze");
+        private Color Accent2 => Color.Lerp(_accent2, new Color(2.6f, 0.6f, 0.4f, 1f), _overdrive * 0.5f);
+
         public void ResetBeat() => _lastBeat = int.MinValue;
 
+        /// <summary>After the camera jumps (song start, preview): refill the star field around the new view at once.</summary>
+        public void Snap()
+        {
+            if (_rig == null || _stars == null) return;
+            Transform cam = _rig.transform;
+            _stars.transform.position = cam.position + cam.rotation * new Vector3(0f, 4f, 22f);
+            _stars.Clear();
+            _stars.Simulate(12f, true, true);
+            _stars.Play();
+        }
+
         public void HitFlash(float amount) => _hitFlash = Mathf.Max(_hitFlash, amount);
+
+        /// <summary>While a song is played, hits (not just the metronome) drive the grid, sky and cubes.</summary>
+        public void SetPlaying(bool playing) => _playing = playing;
+
+        private bool _playing;
+
+        /// <summary>A shockwave ring around <paramref name="focus"/> in <paramref name="tint"/>; scale 1 = a downbeat wave.</summary>
+        public void Shockwave(Vector3 focus, Color tint, float scale)
+        {
+            int i = SpawnWave(focus);
+            _waveTint[i] = tint;
+            _waveScale[i] = scale;
+        }
 
         /// <summary>0..1: overdrive shifts the world toward gold/magenta and makes everything pulse harder.</summary>
         public void SetOverdrive(float level) => _overdrive = Mathf.Clamp01(level);
@@ -227,19 +302,30 @@ namespace DropBeat
             }
 
             _hitFlash = Mathf.MoveTowards(_hitFlash, 0f, dt * 3.5f);
-            float gridI = (0.08f + 0.22f * _pulse + 0.2f * _hitFlash + 0.08f * fever) * (1f + 0.55f * _overdrive);
-            SetColor(_gridRenderer, Color.Lerp(Accent, new Color(1.6f, 0.4f, 2.2f), 0.35f) * gridI);
+            float gridI = _playing
+                ? ((0.08f + 0.15f * _pulse + 0.08f * fever) * GridStrength + 0.3f * _hitFlash * Mathf.Max(GridStrength, 0.5f)) * (1f + 0.55f * _overdrive)
+                : (0.08f + 0.22f * _pulse + 0.2f * _hitFlash + 0.08f * fever) * (1f + 0.55f * _overdrive) * GridStrength;
+            SetColor(_gridRenderer, Color.Lerp(Accent, Accent2, 0.35f) * gridI);
 
             if (_backdropRenderer != null)
             {
                 _mpb.Clear();
                 _mpb.SetColor(AccentId, Accent);
                 _mpb.SetVector(QuadSizeId, new Vector4(BackdropSize, BackdropSize, 0f, 0f));
+                _mpb.SetColor(SkyTopId, _skyTop);
+                _mpb.SetColor(SkyBottomId, _skyBottom);
+                _mpb.SetColor(SunTopId, _sunTop);
+                _mpb.SetColor(SunBottomId, _sunBottom);
+                _mpb.SetColor(HazeId, _haze);
+                _mpb.SetColor(Accent2Id, Accent2);
+                _mpb.SetFloat(SceneId, (float)_scene);
                 // Looking up the tunnel the sun swings behind the rings: dim it so the rings stay readable.
                 if (_sunIntensity < 0f) _sunIntensity = _backdropRenderer.sharedMaterial.GetFloat(SunIntensityId);
                 float lookUp = Mathf.InverseLerp(0.1f, 0.7f, (rot * Vector3.forward).y);
                 _mpb.SetFloat(SunIntensityId, _sunIntensity * (1f - 0.65f * lookUp));
-                _mpb.SetFloat(PulseId, Mathf.Clamp01(_pulse * (0.8f + 0.6f * _overdrive) + _hitFlash * 0.3f));
+                _mpb.SetFloat(PulseId, _playing
+                    ? Mathf.Clamp01(Mathf.Clamp01(_pulse * 0.55f * (1f + 0.6f * _overdrive)) + _hitFlash * 0.45f)
+                    : Mathf.Clamp01(_pulse * (0.8f + 0.6f * _overdrive) + _hitFlash * 0.3f));
                 _mpb.SetVector(ScrollId, new Vector4(cam.x * 0.3f, cam.y * 0.22f, 0f, 0f));
                 // Narrow phone views get a smaller sun so it frames the path instead of filling it.
                 bool portrait = _rig.Cam.aspect < 1f;
@@ -271,7 +357,7 @@ namespace DropBeat
                     int b = Mathf.Max(a + 1, Mathf.FloorToInt(Mathf.Pow(2f, (i + 1) * 8.6f / Bands)));
                     float sum = 0f;
                     for (int j = a; j < b && j < _spectrum.Length; j++) sum += _spectrum[j];
-                    level = Mathf.Clamp01(Mathf.Sqrt(sum) * (1.6f + i * 0.25f));
+                    level = Mathf.Clamp01(Mathf.Sqrt(sum) * (1.6f + i * 0.25f) / Mathf.Max(0.3f, MixBus.MusicDuck)); // hit ducks do not dip the bars
                 }
 
                 _levels[i] = level > _levels[i] ? Mathf.Lerp(_levels[i], level, 0.6f) : Mathf.MoveTowards(_levels[i], level, dt * 1.8f);
@@ -281,7 +367,7 @@ namespace DropBeat
                 _barsR[i].SetPositionAndRotation(cam + rot * new Vector3(halfW - len * 0.5f, y, dist), rot);
                 _barsL[i].localScale = new Vector3(len, barH, 1f);
                 _barsR[i].localScale = new Vector3(len, barH, 1f);
-                Color col = Color.Lerp(Accent, new Color(2.6f, 0.35f, 1.9f), i / (float)Bands) * (0.035f + 0.22f * _levels[i] + 0.05f * fever) * (1f + 0.5f * _overdrive);
+                Color col = Color.Lerp(Accent, Accent2, i / (float)Bands) * (0.035f + 0.22f * _levels[i] + 0.05f * fever) * (1f + 0.5f * _overdrive);
                 SetColor(_barRenderers[i * 2], col);
                 SetColor(_barRenderers[i * 2 + 1], col);
             }
@@ -289,30 +375,42 @@ namespace DropBeat
 
         private void TickCubes(float dt, Vector3 focus)
         {
-            Color c = Color.Lerp(Accent, new Color(1.6f, 0.4f, 2.2f), 0.5f);
+            Color c = Color.Lerp(Accent, Accent2, 0.5f);
             for (int i = 0; i < Cubes; i++)
             {
                 Transform t = _cubes[i];
                 Vector3 p = t.position;
-                if (p.y < focus.y - CubeSpan * 0.5f) p.y += CubeSpan;
-                else if (p.y > focus.y + CubeSpan * 0.5f) p.y -= CubeSpan;
+                // Wrap by any number of spans, so a camera jump does not leave the cubes behind.
+                p.y = focus.y + Mathf.Repeat(p.y - focus.y + CubeSpan * 0.5f, CubeSpan) - CubeSpan * 0.5f;
                 t.position = p;
                 t.Rotate(_cubeSpin[i] * dt, Space.Self);
                 // Nearer cubes slightly brighter; all of them pulse on the beat.
                 float near = Mathf.InverseLerp(26f, 2f, p.z);
-                SetColor(_cubeRenderers[i], c * ((0.06f + 0.06f * near) * (1f + 1.5f * _pulse + _hitFlash) * (1f + 0.6f * _overdrive)));
+                float hit = _playing ? 1f + 0.9f * _pulse + 1.6f * _hitFlash : 1f + 1.5f * _pulse + _hitFlash;
+                SetColor(_cubeRenderers[i], c * ((0.06f + 0.06f * near) * hit * (1f + 0.6f * _overdrive)));
             }
         }
 
-        private void SpawnWave(Vector3 focus)
+        private int SpawnWave(Vector3 focus)
         {
+            if (_waveTint == null || _waveTint.Length != _waves.Length)
+            {
+                _waveTint = new Color[_waves.Length];
+                _waveScale = new float[_waves.Length];
+            }
             int i = _nextWave;
             _nextWave = (_nextWave + 1) % _waves.Length;
             _waveAge[i] = 0f;
+            _waveTint[i] = Color.clear;
+            _waveScale[i] = 1f;
             _waves[i].gameObject.SetActive(true);
             Quaternion rot = _rig.transform.rotation;
             _waves[i].SetPositionAndRotation(focus + rot * new Vector3(0f, 0f, 14f), rot * Quaternion.Euler(90f, 0f, 0f));
+            return i;
         }
+
+        private Color[] _waveTint;
+        private float[] _waveScale;
 
         private void TickWaves(float dt)
         {
@@ -326,9 +424,11 @@ namespace DropBeat
 
                 _waveAge[i] += dt;
                 float a = Mathf.Clamp01(_waveAge[i] / 1.2f);
-                float r = Mathf.Lerp(1.5f, 13f, 1f - (1f - a) * (1f - a));
+                float s = _waveScale != null ? _waveScale[i] : 1f;
+                float r = Mathf.Lerp(1.5f, 13f * s, 1f - (1f - a) * (1f - a));
                 _waves[i].localScale = new Vector3(r, r, r);
-                SetColor(_waveRenderers[i], Accent * (0.3f * (1f - a) * (1f - a)) * (1f + _overdrive));
+                Color tint = _waveTint != null && _waveTint[i].a > 0f ? _waveTint[i] : Accent;
+                SetColor(_waveRenderers[i], tint * (0.3f * Mathf.Max(1f, s * 0.8f) * (1f - a) * (1f - a)) * (1f + _overdrive));
             }
         }
 

@@ -84,11 +84,17 @@ namespace DropBeat
             return go.transform;
         }
 
-        public void Bind(PlayNote note, Color accent)
+        /// <summary>Sonar twist: 0..1 brightness of the current ping (hidden rings show while it is up).</summary>
+        public static float SonarPing;
+
+        public void Bind(PlayNote note, Color accent, Color accent2)
         {
             _note = note;
             note.view = this;
-            _base = note.kind == NoteKind.Offbeat ? _assets.offbeat : accent;
+            _accent2 = accent2;
+            _streak01 = 0f;
+            _overdriveHit = false;
+            _base = note.kind == NoteKind.Offbeat ? accent2 : accent;
             _segments = note.kind == NoteKind.Downbeat ? 12f : note.kind == NoteKind.Offbeat ? 6f : 8f;
             _thickness = note.kind == NoteKind.Downbeat ? 0.085f : note.kind == NoteKind.Offbeat ? 0.06f : 0.072f;
             _arrow = Vector4.zero;
@@ -106,7 +112,7 @@ namespace DropBeat
                     _segments = 20f;
                     break;
                 case NoteType.Swipe:
-                    _base = _assets.offbeat;
+                    _base = accent2;
                     _segments = 4f;
                     _thickness = 0.08f;
                     float angle = note.swipe == SwipeDir.Left ? -Mathf.PI * 0.5f : note.swipe == SwipeDir.Right ? Mathf.PI * 0.5f : 0f;
@@ -149,6 +155,17 @@ namespace DropBeat
             gameObject.SetActive(false);
         }
 
+        private float _streak01;
+        private bool _overdriveHit;
+        private Color _accent2 = Color.white;
+
+        /// <summary>How hot the hit should look: streak tier 0..1 and overdrive. Call before <see cref="OnJudged"/>.</summary>
+        public void SetHitContext(float streak01, bool overdrive)
+        {
+            _streak01 = Mathf.Clamp01(streak01);
+            _overdriveHit = overdrive;
+        }
+
         public void OnJudged(Grade grade, double songTime)
         {
             _grade = grade;
@@ -179,8 +196,20 @@ namespace DropBeat
 
             Color body = _base;
             // Rings further ahead fade into the distance: a depth cue that also keeps the next ring obvious.
-            body.a = isTarget ? 1f + 0.25f * fever : 0.45f * Mathf.Clamp01(1.6f - u * 0.35f);
-            Color fillColor = isTarget ? Color.Lerp(_base * 1.3f, _assets.perfect, closeness * closeness) : _base;
+            // The target ring holds back a little (0.9) so the hit flash has headroom at any combo.
+            body.a = isTarget ? 0.9f : 0.45f * Mathf.Clamp01(1.6f - u * 0.35f);
+            float vis = 1f;
+            if (_note.hidden)
+            {
+                // Sonar: dark until the ring becomes the target (fading in) or a ping sweeps over it.
+                vis = Mathf.Max(isTarget ? Mathf.Clamp01(closeness * 2.5f) : 0f, SonarPing);
+                body *= vis; // colour too: the 3D band ignores alpha
+            }
+            if (_note.fx == NoteFx.Mirage && t < _note.time - _note.fxLead * 0.2)
+            {
+                body.a *= 0.65f + 0.35f * Mathf.Sin((float)t * 31f + _note.index); // heat shimmer
+            }
+            Color fillColor = isTarget ? Color.Lerp(_base * 1.15f, _assets.perfect * 0.7f, closeness * closeness) : _base;
             SetRing(_body, body, fillColor, isTarget ? closeness : 0f, 0f, isTarget ? 0.6f + 0.4f * closeness : 0f, _segments, _thickness, spin, _arrow);
 
             if (isTarget && u < 1f && u > -0.25f)
@@ -199,7 +228,7 @@ namespace DropBeat
             }
 
             if (_note.type == NoteType.Hold) TickRail(0f, isTarget ? 0.5f + 0.5f * closeness : 0.35f);
-            if (_beam.enabled) TickBeam(t, isTarget ? 0.4f + 0.6f * closeness : 0.25f);
+            if (_beam.enabled) TickBeam(t, (isTarget ? 0.4f + 0.6f * closeness : 0.25f) * vis);
         }
 
         private void TickHolding(double t, Vector3 ball)
@@ -281,16 +310,52 @@ namespace DropBeat
 
         private void TickHit(double t)
         {
-            float a = Mathf.Clamp01((float)(t - _stateTime) / 0.4f);
-            float ease = 1f - (1f - a) * (1f - a);
-            Color c = _assets.GradeColor(_grade);
+            // Two-stage envelope: a white-hot flash on contact (decays in ~45 ms), then the grade-coloured shatter.
+            float dt = Mathf.Max(0f, (float)(t - _stateTime));
+            bool impact = _note != null && _note.impact;
+            float dur = _grade == Grade.Perfect ? 0.34f : _grade == Grade.Great ? 0.30f : 0.26f;
+            float a = Mathf.Clamp01(dt / dur);
+            float ease = 1f - (1f - a) * (1f - a) * (1f - a);
+            float k = Mathf.Exp(-dt / 0.045f);
+            // Kept modest: the scene's bloom turns anything brighter into a screen-filling blob.
+            float w = (_grade == Grade.Perfect ? 2.2f : _grade == Grade.Great ? 1.7f : 1.1f) * (impact ? 1.3f : 1f) * (1f + 0.25f * _streak01);
+            Color gc = _assets.GradeColor(_grade) * 1.2f;
+            if (_streak01 >= 0.5f) gc = Color.Lerp(gc, Color.white * gc.maxColorComponent, 0.3f);
+            if (_overdriveHit) gc = Color.Lerp(gc, new Color(2.6f, 0.6f, 2.2f, 1f), 0.5f); // white-pink against the gold world
+            Color c = Color.Lerp(gc, Color.white * w, k);
             Color body = c;
             body.a = 1.3f;
-            SetRing(_body, body, c * 1.2f, 1f, ease, 0.4f * (1f - a), _segments, _thickness, (float)t * 0.04f * _spinDir + ease * 0.08f * _spinDir, _arrow);
-            _approach.enabled = false;
+            SetRing(_body, body, c, 1f, ease, 0.4f * (1f - a), _segments, _thickness, (float)t * 0.04f * _spinDir + ease * 0.08f * _spinDir, _arrow);
             _beam.enabled = false;
-            _rail.enabled = _railFill.enabled = _cap.enabled = false;
+            _rail.enabled = _railFill.enabled = false;
+
+            // The approach circle the player was watching bounces off the ring as a shockwave.
+            float ds = _grade == Grade.Perfect ? 0.24f : _grade == Grade.Great ? 0.20f : 0.16f;
+            float kk = (_grade == Grade.Perfect ? 1.3f : _grade == Grade.Great ? 0.9f : 0.5f) * (impact ? 1.6f : 1f) * (1f + 0.4f * _streak01);
+            float sa = Mathf.Clamp01(dt / ds);
+            _approach.enabled = sa < 1f;
+            if (sa < 1f) Wave(_approachT, _approach, sa, kk, Color.Lerp(Color.white * 1.8f, _assets.GradeColor(_grade), sa));
+
+            // Hot streaks and overdrive: a second, thinner wave 60 ms later in the song's second colour.
+            float sb = Mathf.Clamp01((dt - 0.06f) / ds);
+            bool second = (_streak01 >= 1f || _overdriveHit) && dt >= 0.06f && sb < 1f && _note != null && _note.type != NoteType.Hold;
+            _cap.enabled = second;
+            if (second)
+            {
+                _capT.localPosition = Vector3.zero;
+                _capT.localRotation = Quaternion.identity;
+                Wave(_capT, _cap, sb, kk * 0.8f, _accent2 * 1.4f);
+            }
             if (a >= 1f) Release();
+        }
+
+        private void Wave(Transform tr, Renderer r, float sa, float k, Color col)
+        {
+            float e = 1f - (1f - sa) * (1f - sa) * (1f - sa);
+            float s = 1f + k * e;
+            tr.localScale = Vector3.one * (QuadSize * s);
+            col.a = (1f - sa) * (1f - sa);
+            SetRing(r, col, col, 1f, 0f, 0f, 0f, Mathf.Lerp(0.05f, 0.008f, sa) / s, 0f, Vector4.zero);
         }
 
         private void TickMiss(double t)
@@ -301,7 +366,18 @@ namespace DropBeat
             _bodyT.localPosition = new Vector3(0f, -0.8f * a * a, 0f);
             _bandT.localPosition = _bodyT.localPosition;
             SetRing(_body, c, c, 0f, 0f, 0f, _segments, _thickness, 0f, _arrow);
-            _approach.enabled = false;
+            // The approach circle implodes onto the ring in red.
+            float sa = Mathf.Clamp01((float)(t - _stateTime) / 0.15f);
+            _approach.enabled = sa < 1f;
+            if (sa < 1f)
+            {
+                float e = 1f - (1f - sa) * (1f - sa);
+                float s = 1f - 0.35f * e;
+                _approachT.localScale = Vector3.one * (QuadSize * s);
+                Color mc = _assets.miss;
+                mc.a = 0.8f * (1f - sa);
+                SetRing(_approach, mc, mc, 1f, 0f, 0f, 0f, 0.02f / s, 0f, Vector4.zero);
+            }
             _beam.enabled = false;
             _rail.enabled = _railFill.enabled = _cap.enabled = false;
             if (a >= 1f) Release();

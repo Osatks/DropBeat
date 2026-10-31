@@ -52,6 +52,46 @@ namespace DropBeat
         public static Sprite RingOutline => _ringOutline != null ? _ringOutline : (_ringOutline = MakeRounded(256, 128, 7f, 0f, 1f, false));
         public static Sprite GlowSprite => _glow != null ? _glow : (_glow = MakeGlow(128));
         public static Sprite Rounded => _rounded != null ? _rounded : (_rounded = MakeRounded(64, 14, 0f, 1f, 1f));
+        private static Sprite _star, _starOutline;
+        /// <summary>Filled 5-point star and its outline (for earned / missing stars).</summary>
+        public static Sprite Star => _star != null ? _star : (_star = MakeStar(128, 0f));
+        public static Sprite StarOutline => _starOutline != null ? _starOutline : (_starOutline = MakeStar(128, 6f));
+
+        /// <summary>5-point star from a signed distance (outer radius 0.95, inner ratio 0.45); band &gt; 0 = outline only.</summary>
+        private static Sprite MakeStar(int size, float band)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var px = new Color32[size * size];
+            float half = size * 0.5f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2((x + 0.5f - half) / half, (y + 0.5f - half) / half + 0.06f);
+                    float d = StarDistance(p, 0.95f, 0.45f) * half; // pixels, negative inside
+                    float a = band > 0f ? Mathf.Clamp01(0.5f - d) * Mathf.Clamp01(band + 0.5f + d) : Mathf.Clamp01(0.5f - d);
+                    px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply(false, true);
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        // Inigo Quilez's sdStar5.
+        private static float StarDistance(Vector2 p, float r, float rf)
+        {
+            var k1 = new Vector2(0.809016994375f, -0.587785252292f);
+            var k2 = new Vector2(-k1.x, k1.y);
+            p.x = Mathf.Abs(p.x);
+            p -= 2f * Mathf.Max(Vector2.Dot(k1, p), 0f) * k1;
+            p -= 2f * Mathf.Max(Vector2.Dot(k2, p), 0f) * k2;
+            p.x = Mathf.Abs(p.x);
+            p.y -= r;
+            Vector2 ba = rf * new Vector2(-k1.y, k1.x) - new Vector2(0f, 1f);
+            float h = Mathf.Clamp(Vector2.Dot(p, ba) / Vector2.Dot(ba, ba), 0f, r);
+            return (p - ba * h).magnitude * Mathf.Sign(p.y * ba.x - p.x * ba.y);
+        }
 
         // ------------------------------------------------------------------ sprites
 

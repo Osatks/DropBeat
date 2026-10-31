@@ -40,7 +40,14 @@ jobs:
           find . -name '*.sh' -exec chmod +x {} +
           chmod -R +x Il2CppOutputProject/IL2CPP/build
           xcodebuild -version
-          xcodebuild -project Unity-iPhone.xcodeproj -scheme Unity-iPhone -configuration Release \
+          # Ads (Unity LevelPlay) add native dependencies. The Windows editor can only write the Podfile;
+          # install the pods here and build the workspace. Swift packages, if used instead, resolve on build.
+          TARGET=(-project Unity-iPhone.xcodeproj)
+          if [ -f Podfile ]; then
+            pod install --repo-update
+            TARGET=(-workspace Unity-iPhone.xcworkspace)
+          fi
+          xcodebuild "${TARGET[@]}" -scheme Unity-iPhone -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ../dd \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
             build > ../build.log 2>&1 || { tail -n 300 ../build.log; exit 1; }

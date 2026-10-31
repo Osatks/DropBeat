@@ -14,11 +14,11 @@ namespace DropBeat
     /// sample-locked to the music; hit sounds play immediately on tap.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class SfxPlayer : MonoBehaviour
+    public sealed partial class SfxPlayer : MonoBehaviour
     {
         private const int ScheduledVoices = 12;
         private const int LayerVoices = 10;
-        private const int ScaleSteps = 8;
+        private const int ScaleSteps = 11;
         private static readonly int[] ArpPattern = { 0, 2, 4, 5, 4, 2, 1, 3 };
 
         private AudioSource[] _voices;
@@ -32,13 +32,15 @@ namespace DropBeat
         private AudioClip[] _perfect;
         private AudioClip[] _great;
         private AudioClip[] _arp;
-        private AudioClip _good;
+        private AudioClip[] _good;
         private AudioClip _fanfare;
         private AudioClip _riser;
         private AudioClip _holdRelease;
         private int _keyRoot = -1;
         private bool _keyMinor;
+        private HitStyle _style;
         private readonly Dictionary<int, AudioClip[]> _cache = new Dictionary<int, AudioClip[]>();
+        private readonly List<int> _cacheOrder = new List<int>();
 
         public AudioClip Tick { get; private set; }
         public AudioClip TickAccent { get; private set; }
@@ -52,6 +54,8 @@ namespace DropBeat
         /// <summary>Big-moment hit: deep falling boom + crack + glass shimmer.</summary>
         public AudioClip Impact { get; private set; }
         public AudioClip Fanfare => _fanfare;
+        /// <summary>Neutral snap played at swipe touch-down.</summary>
+        public AudioClip SwipeSnap { get; private set; }
         public AudioClip HoldRelease => _holdRelease;
 
         public float Volume { get; set; } = 0.6f;
@@ -75,7 +79,8 @@ namespace DropBeat
             PowerDown = ToClip("powerDown", Normalize(PowerSweep(_sr, false, rng), 0.7f));
             Clap = ToClip("clap", Normalize(ClapSound(_sr, rng), 0.8f));
             Impact = ToClip("impact", Normalize(Boom(_sr, rng), 0.95f));
-            SetKey(9, true);
+            SwipeSnap = ToClip("swipeSnap", Normalize(Snap(_sr, 4500f, 0.8f, 0.0035f, rng), 0.8f));
+            // Hit clips are built per song (SetKey) when its preview or song starts.
         }
 
         private void OnEnable()
@@ -103,34 +108,49 @@ namespace DropBeat
             return src;
         }
 
-        /// <summary>Retunes the musical sounds to a key (root 0 = C .. 11 = B). Cached per key.</summary>
-        public void SetKey(int root, bool minor)
+        /// <summary>
+        /// Retunes the musical sounds to a key (root 0 = C .. 11 = B) and switches the hit instrument.
+        /// Cached per key and instrument.
+        /// </summary>
+        public void SetKey(int root, bool minor, HitStyle style = HitStyle.Classic)
         {
             root = ((root % 12) + 12) % 12;
-            if (root == _keyRoot && minor == _keyMinor && _perfect != null) return;
+            if (root == _keyRoot && minor == _keyMinor && style == _style && _perfect != null) return;
             _keyRoot = root;
             _keyMinor = minor;
+            _style = style;
 
-            int cacheKey = root * 2 + (minor ? 1 : 0);
+            int cacheKey = (root * 2 + (minor ? 1 : 0)) * 64 + (int)style;
             if (!_cache.TryGetValue(cacheKey, out AudioClip[] clips))
             {
-                clips = BuildKey(root, minor);
+                clips = BuildKey(root, minor, style);
                 _cache[cacheKey] = clips;
+                _cacheOrder.Add(cacheKey);
+                // Keep the last few instruments only; the rest are rebuilt if the player comes back to them.
+                while (_cacheOrder.Count > 3)
+                {
+                    int old = _cacheOrder[0];
+                    _cacheOrder.RemoveAt(0);
+                    foreach (AudioClip c in _cache[old]) if (c != null) Destroy(c);
+                    _cache.Remove(old);
+                }
             }
 
+            // Layout: perfect[0..10], great[11..21], good[22..32], arp[33..43], fanfare, riser, hold release.
             _perfect = new AudioClip[ScaleSteps];
             _great = new AudioClip[ScaleSteps];
+            _good = new AudioClip[ScaleSteps];
             _arp = new AudioClip[ScaleSteps];
             System.Array.Copy(clips, 0, _perfect, 0, ScaleSteps);
             System.Array.Copy(clips, ScaleSteps, _great, 0, ScaleSteps);
-            System.Array.Copy(clips, ScaleSteps * 2, _arp, 0, ScaleSteps);
-            _good = clips[ScaleSteps * 3];
-            _fanfare = clips[ScaleSteps * 3 + 1];
-            _riser = clips[ScaleSteps * 3 + 2];
-            _holdRelease = clips[ScaleSteps * 3 + 3];
+            System.Array.Copy(clips, ScaleSteps * 2, _good, 0, ScaleSteps);
+            System.Array.Copy(clips, ScaleSteps * 3, _arp, 0, ScaleSteps);
+            _fanfare = clips[ScaleSteps * 4];
+            _riser = clips[ScaleSteps * 4 + 1];
+            _holdRelease = clips[ScaleSteps * 4 + 2];
         }
 
-        private AudioClip[] BuildKey(int root, bool minor)
+        private AudioClip[] BuildKey(int root, bool minor, HitStyle style)
         {
             int[] scale = minor ? new[] { 0, 3, 5, 7, 10 } : new[] { 0, 2, 4, 7, 9 };
             // Root placed between E4 and D#5 so the plucks sit above most basslines but stay warm.
@@ -147,22 +167,47 @@ namespace DropBeat
             }
 
             var rng = new System.Random(root * 31 + (minor ? 7 : 3));
-            var clips = new AudioClip[ScaleSteps * 3 + 4];
+            var clips = new AudioClip[ScaleSteps * 4 + 3];
+            bool classic = style == HitStyle.Classic;
+            int delay = Mathf.RoundToInt(_sr * 0.008f);
             for (int i = 0; i < ScaleSteps; i++)
             {
-                clips[i] = ToClip("perfect" + i, Normalize(PerfectHit(freqs[i], rng), 0.9f));
-                clips[ScaleSteps + i] = ToClip("great" + i, Normalize(GreatHit(freqs[i], rng), 0.7f));
-                float[] arp = Pluck(_sr, freqs[i] * 2f, 0.28f, 6000f, 900f, 0.03f, 0.07f, 0.005f, 0f);
-                clips[ScaleSteps * 2 + i] = ToClip("arp" + i, Normalize(Echo(arp, _sr, 0.09f, 0.25f, 0.08f), 0.6f));
+                // Grades sound different by design (snap, sparkle, brightness) and land at matched loudness.
+                float[] tone = HitTone(style, freqs[i], rng);
+                float[] snap = SnapFor(style, rng);
+                float snapGain = 1.1f * Peak(tone) / Mathf.Max(1e-4f, Peak(snap));
+
+                // Perfect: full snap plus an FM sparkle an octave up, the right channel 8 ms late (width).
+                float[] perfect = (float[])tone.Clone();
+                Mix(perfect, snap, snapGain);
+                float[] sparkle = Fm(_sr, freqs[i] * 2f, 0.3f, 2f, 1.5f, 0.04f, 0.12f);
+                float sparkleGain = 0.4f * Peak(tone) / Mathf.Max(1e-4f, Peak(sparkle)); // about -8 dB
+                clips[i] = ToStereoClip("perfect" + i,
+                    NormalizeLoudness(perfect, -17f, sparkle, sparkleGain, 0),
+                    NormalizeLoudness(perfect, -17f, sparkle, sparkleGain, delay));
+
+                // Great: half the snap, no sparkle.
+                float[] great = (float[])tone.Clone();
+                Mix(great, snap, snapGain * 0.5f);
+                clips[ScaleSteps + i] = ToClip("great" + i, NormalizeLoudness(great, -19.5f));
+
+                // Good: dull (low-passed), no snap, short.
+                float[] good = LowPass1(tone, freqs[i] * 2.5f);
+                ShapeTail(good, 0.04f, 0.08f, 0.16f);
+                clips[ScaleSteps * 2 + i] = ToClip("good" + i, NormalizeLoudness(good, -23f));
+
+                float[] arp = classic ? Pluck(_sr, freqs[i] * 2f, 0.28f, 6000f, 900f, 0.03f, 0.07f, 0.005f, 0f) : Voice(style, freqs[i] * 2f, 0.28f, rng);
+                ShapeTail(arp, 0.08f, 0.06f, 0.25f);
+                clips[ScaleSteps * 3 + i] = ToClip("arp" + i, NormalizeLoudness(arp, -25f));
             }
-            clips[ScaleSteps * 3] = ToClip("good", Normalize(Pluck(_sr, freqs[0] * 0.5f, 0.22f, 1400f, 300f, 0.04f, 0.07f, 0.004f, 0.2f), 0.5f));
 
             // Fanfare / hold release: quick rising arpeggio root-third-fifth-octave.
-            clips[ScaleSteps * 3 + 1] = ToClip("fanfare", Normalize(Arpeggio(freqs, new[] { 0, 2, 3, 5 }, 0.065f, 0.75f), 0.85f));
-            clips[ScaleSteps * 3 + 3] = ToClip("holdRelease", Normalize(Arpeggio(freqs, new[] { 3, 5, 7 }, 0.045f, 0.55f), 0.8f));
+            clips[ScaleSteps * 4] = ToClip("fanfare", Normalize(classic
+                ? Arpeggio(freqs, new[] { 0, 2, 3, 5 }, 0.065f, 0.75f)
+                : StyledArpeggio(style, freqs, new[] { 0, 2, 3, 5 }, 0.065f, 0.75f, rng), 0.85f));
+            clips[ScaleSteps * 4 + 2] = ToClip("holdRelease", Normalize(Arpeggio(freqs, new[] { 3, 5, 7 }, 0.045f, 0.55f), 0.8f));
 
-            // Hold riser: a sustained chord whose filter opens over 4 seconds.
-            clips[ScaleSteps * 3 + 2] = ToClip("riser", Normalize(Riser((float)rootHz, minor), 0.7f));
+            // Hold riser (clips[ScaleSteps * 4 + 1]) is built only if a hold is ever played (see StartHold).
             return clips;
         }
 
@@ -178,23 +223,137 @@ namespace DropBeat
             return Echo(y, _sr, 0.11f, 0.3f, 0.12f);
         }
 
-        private float[] PerfectHit(float freq, System.Random rng)
+        /// <summary>The tonal part of a hit: the song's instrument (or the classic pluck), dry, with a short tail.</summary>
+        private float[] HitTone(HitStyle style, float freq, System.Random rng)
         {
-            float[] y = Pluck(_sr, freq, 0.65f, 8000f, 550f, 0.075f, 0.2f, 0.007f, 0.25f);
-            Mix(y, Pluck(_sr, freq * 2f, 0.65f, 9000f, 1200f, 0.05f, 0.12f, 0.005f, 0f), 0.3f);
-            Mix(y, Sine(_sr, 0.65f, freq * 4f, 0.16f), 0.07f);
-            Mix(y, Sine(_sr, 0.65f, freq * 6f, 0.09f), 0.04f);
-            Mix(y, Thump(_sr, 0.2f), 0.55f);
-            Mix(y, Click(_sr, rng), 0.45f);
-            return Echo(y, _sr, 0.12f, 0.3f, 0.13f);
+            float[] y;
+            if (style == HitStyle.Classic)
+            {
+                y = Pluck(_sr, freq, 0.4f, 8000f, 550f, 0.075f, 0.2f, 0.007f, 0.25f);
+                Mix(y, Pluck(_sr, freq * 2f, 0.4f, 9000f, 1200f, 0.05f, 0.12f, 0.005f, 0f), 0.3f);
+            }
+            else
+            {
+                y = Voice(style, freq, 0.45f, rng);
+            }
+            // Styles whose energy sits below 1 kHz get an octave on top so they read on a phone speaker.
+            switch (style)
+            {
+                case HitStyle.Classic:
+                case HitStyle.Marimba:
+                case HitStyle.Anvil:
+                case HitStyle.AnalogPluck:
+                case HitStyle.Zap:
+                case HitStyle.Clav:
+                    Mix(y, Sine(_sr, 0.35f, freq * 2f, 0.09f), 0.35f);
+                    break;
+            }
+            bool ringing = style == HitStyle.SonarPing || style == HitStyle.GlassBell || style == HitStyle.Chime;
+            ShapeTail(y, 0.12f, 0.08f, ringing ? 0.4f : 0.3f);
+            return y;
         }
 
-        private float[] GreatHit(float freq, System.Random rng)
+        /// <summary>Exponential fade after <paramref name="hold"/> s, silent after <paramref name="length"/> s.</summary>
+        private void ShapeTail(float[] y, float hold, float tau, float length)
         {
-            float[] y = Pluck(_sr, freq, 0.45f, 4200f, 450f, 0.05f, 0.14f, 0.006f, 0.2f);
-            Mix(y, Thump(_sr, 0.15f), 0.3f);
-            Mix(y, Click(_sr, rng), 0.3f);
-            return Echo(y, _sr, 0.12f, 0.2f, 0.07f);
+            int n = Mathf.Min(y.Length, Mathf.CeilToInt(_sr * length));
+            for (int i = 0; i < y.Length; i++)
+            {
+                if (i >= n)
+                {
+                    y[i] = 0f;
+                    continue;
+                }
+                float t = i / (float)_sr;
+                if (t > hold) y[i] *= Mathf.Exp(-(t - hold) / tau);
+                // Short cosine fade into the cut, so the trim never clicks.
+                int fade = Mathf.CeilToInt(_sr * 0.01f);
+                if (i > n - fade) y[i] *= 0.5f * (1f + Mathf.Cos(Mathf.PI * (i - (n - fade)) / fade));
+            }
+        }
+
+        private float[] LowPass1(float[] x, float cutoff)
+        {
+            float a = 1f - Mathf.Exp(-2f * Mathf.PI * Mathf.Min(cutoff, _sr * 0.45f) / _sr);
+            var y = new float[x.Length];
+            float s = 0f;
+            for (int i = 0; i < x.Length; i++)
+            {
+                s += a * (x[i] - s);
+                y[i] = s;
+            }
+            return y;
+        }
+
+        private static float Peak(float[] y)
+        {
+            float m = 0f;
+            for (int i = 0; i < y.Length; i++) m = Mathf.Max(m, Mathf.Abs(y[i]));
+            return m;
+        }
+
+        /// <summary>
+        /// Sets a hit's loudness instead of its peak: the level is measured over the first 120 ms through a
+        /// phone-speaker weighting (high-pass 150 Hz, +4 dB shelf above 1.5 kHz), so every instrument lands
+        /// at the same perceived level. <paramref name="extra"/> is mixed in first (delayed by
+        /// <paramref name="extraDelay"/> samples). Peaks are soft-limited below 0.95.
+        /// </summary>
+        private float[] NormalizeLoudness(float[] dry, float targetDb, float[] extra = null, float extraGain = 0f, int extraDelay = 0)
+        {
+            var y = (float[])dry.Clone();
+            if (extra != null) MixAt(y, extra, extraDelay, extraGain);
+            float[] w = Biquad(y, true, 150f, 0.707f, 0f);
+            w = Biquad(w, false, 1500f, 0.707f, 4f);
+            int m = Mathf.Min(w.Length, Mathf.CeilToInt(0.12f * _sr));
+            double ms = 1e-12;
+            for (int i = 0; i < m; i++) ms += w[i] * (double)w[i];
+            ms /= Mathf.Max(1, m);
+            float g = Mathf.Pow(10f, (float)((targetDb - 10.0 * System.Math.Log10(ms)) / 20.0));
+            const float ceiling = 0.95f, knee = 0.9f * ceiling, room = 0.1f * ceiling;
+            int fade = Mathf.Min(y.Length, 480);
+            for (int i = 0; i < y.Length; i++)
+            {
+                float x = y[i] * g;
+                float a = Mathf.Abs(x);
+                if (a > knee) x = Mathf.Sign(x) * (knee + room * (float)System.Math.Tanh((a - knee) / room));
+                float edge = i >= y.Length - fade ? (y.Length - i) / (float)fade : 1f;
+                y[i] = x * edge;
+            }
+            return y;
+        }
+
+        /// <summary>RBJ cookbook high-pass or high-shelf (used for the loudness measurement only).</summary>
+        private float[] Biquad(float[] x, bool highPass, float fc, float q, float gainDb)
+        {
+            double w0 = 2 * System.Math.PI * fc / _sr, cs = System.Math.Cos(w0), sn = System.Math.Sin(w0);
+            double alpha = sn / (2 * q), b0, b1, b2, a0, a1, a2;
+            if (highPass)
+            {
+                b0 = (1 + cs) / 2; b1 = -(1 + cs); b2 = (1 + cs) / 2;
+                a0 = 1 + alpha; a1 = -2 * cs; a2 = 1 - alpha;
+            }
+            else
+            {
+                double A = System.Math.Pow(10, gainDb / 40), sq = 2 * System.Math.Sqrt(A) * alpha;
+                b0 = A * ((A + 1) + (A - 1) * cs + sq);
+                b1 = -2 * A * ((A - 1) + (A + 1) * cs);
+                b2 = A * ((A + 1) + (A - 1) * cs - sq);
+                a0 = (A + 1) - (A - 1) * cs + sq;
+                a1 = 2 * ((A - 1) - (A + 1) * cs);
+                a2 = (A + 1) - (A - 1) * cs - sq;
+            }
+            var y = new float[x.Length];
+            double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+            for (int i = 0; i < x.Length; i++)
+            {
+                double v = (b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
+                x2 = x1;
+                x1 = x[i];
+                y2 = y1;
+                y1 = v;
+                y[i] = (float)v;
+            }
+            return y;
         }
 
         private float[] Riser(float rootHz, bool minor)
@@ -229,24 +388,37 @@ namespace DropBeat
 
         // ------------------------------------------------------------------ playback
 
-        /// <summary>Hit feedback. <paramref name="combo"/> is the combo after this hit; pan -1..1 for dual rings.</summary>
-        public void PlayHit(Grade grade, int combo, float pan = 0f)
+        /// <summary>
+        /// Hit feedback: note <paramref name="step"/> (0..10) of the hit riff. Grade levels are baked into the
+        /// clips, so the gain is the same for every grade. The streak tier stacks voices: an octave double
+        /// from tier 1, a harmony from tier 3, a sparkle at tier 4 (not on Hard); overdrive adds the gold
+        /// layer. pan -1..1 for dual rings.
+        /// </summary>
+        public void PlayHit(Grade grade, int step, int tier, bool overdrive, float pan = 0f, bool hard = false)
         {
-            int step = Mathf.Max(0, combo - 1) % ScaleSteps;
-            switch (grade)
+            if (grade == Grade.Miss)
             {
-                case Grade.Perfect: PlayNow(_perfect[step], 0.6f, pan); break;
-                case Grade.Great: PlayNow(_great[step], 0.55f, pan); break;
-                case Grade.Good: PlayNow(_good, 0.5f, pan); break;
-                default: PlayNow(Miss, 0.5f, pan); break;
+                PlayMiss();
+                return;
             }
+            step = Mathf.Clamp(step, 0, ScaleSteps - 1);
+            AudioClip main = grade == Grade.Perfect ? _perfect[step] : grade == Grade.Great ? _great[step] : _good[step];
+            PlayNow(main, 0.8f, pan);
+            if (grade == Grade.Good) return;
+            if (tier >= 1) PlayNow(_arp[step], 0.35f, pan);
+            if (tier >= 3) PlayNow(_great[Mathf.Min(step + 3, ScaleSteps - 1)], 0.3f, pan > 0f ? -0.3f : 0.3f);
+            if (tier >= 4 && !hard) PlayNow(Smash, 0.12f, pan);
+            if (overdrive) PlayNow(Gold(step), 0.45f, pan);
         }
 
+        public void PlayMiss() => PlayNow(Miss, 0.5f);
+
         /// <summary>Companion catch: a chord tone above the main hit, so balls joining build a harmony.</summary>
-        public void PlayHarmony(int combo, int ball)
+        public void PlayHarmony(int mainStep, int ball)
         {
-            int step = (Mathf.Max(0, combo - 1) + 2 * ball) % ScaleSteps;
-            PlayNow(_great[step], 0.35f, ball == 2 ? 0.5f : ball == 1 ? -0.5f : 0f);
+            int[] up = { 0, 2, 3, 5 };
+            int step = Mathf.Min(Mathf.Max(0, mainStep) + up[Mathf.Clamp(ball, 0, 3)], ScaleSteps - 1);
+            PlayNow(_great[step], 0.6f, ball == 2 ? 0.5f : ball == 1 ? -0.5f : 0f);
         }
 
         public AudioClip ArpNote(int index)
@@ -257,7 +429,15 @@ namespace DropBeat
         /// <summary>Starts the hold riser, stretched so its sweep peaks as the rail ends.</summary>
         public void StartHold(float seconds)
         {
-            if (_holdSource == null || _riser == null) return;
+            if (_holdSource == null || _keyRoot < 0) return;
+            if (_riser == null)
+            {
+                // Built on first use only: a sustained chord whose filter opens over 4 seconds.
+                double rootHz = 440.0 * System.Math.Pow(2.0, (_keyRoot - 9) / 12.0);
+                while (rootHz < 329.6) rootHz *= 2.0;
+                while (rootHz >= 622.0) rootHz *= 0.5;
+                _riser = ToClip("riser", Normalize(Riser((float)rootHz, _keyMinor), 0.7f));
+            }
             _holdSource.Stop();
             _holdSource.clip = _riser;
             _holdSource.pitch = Mathf.Clamp(3.6f / Mathf.Max(0.3f, seconds), 0.85f, 1.6f);
@@ -271,10 +451,10 @@ namespace DropBeat
             if (_holdSource != null) _holdSource.Stop();
         }
 
-        /// <summary>Plays <paramref name="clip"/> exactly at DSP time <paramref name="dspTime"/>.</summary>
-        public void PlayAt(AudioClip clip, double dspTime, float volume = 1f)
+        /// <summary>Plays <paramref name="clip"/> exactly at DSP time <paramref name="dspTime"/>; returns the voice for <see cref="CancelScheduled"/>.</summary>
+        public int PlayAt(AudioClip clip, double dspTime, float volume = 1f)
         {
-            if (clip == null || _voices == null) return;
+            if (clip == null || _voices == null) return -1;
             int idx = -1;
             for (int i = 0; i < ScheduledVoices; i++)
             {
@@ -294,12 +474,23 @@ namespace DropBeat
             src.volume = volume * Volume;
             src.PlayScheduled(dspTime);
             _voiceEnd[idx] = dspTime + clip.length;
+            return idx;
+        }
+
+        /// <summary>Drops a sound scheduled with <see cref="PlayAt"/> (pass its return value).</summary>
+        public void CancelScheduled(int idx)
+        {
+            if (_voices == null || idx < 0 || idx >= ScheduledVoices) return;
+            _voices[idx].Stop();
+            _voiceEnd[idx] = 0;
         }
 
         /// <summary>Schedules a combo-layer sound (claps / arpeggio); all can be cut at once on a miss.</summary>
         public void PlayLayerAt(AudioClip clip, double dspTime, float volume)
         {
             if (clip == null || _layer == null) return;
+            if (_layerFade >= 0f) return; // still fading out after a miss
+            NoteLayerStart(_nextLayer, dspTime);
             AudioSource src = _layer[_nextLayer];
             _nextLayer = (_nextLayer + 1) % LayerVoices;
             src.Stop();
@@ -312,6 +503,19 @@ namespace DropBeat
         {
             if (_layer == null) return;
             for (int i = 0; i < LayerVoices; i++) _layer[i].Stop();
+        }
+
+        /// <summary>Stops every scheduled sound except one voice (the finale chord rings on into the results).</summary>
+        public void StopScheduledExcept(int keep)
+        {
+            if (_voices == null) return;
+            for (int i = 0; i < ScheduledVoices; i++)
+            {
+                if (i == keep) continue;
+                _voices[i].Stop();
+                _voiceEnd[i] = 0;
+            }
+            StopLayer();
         }
 
         public void StopScheduled()
@@ -597,6 +801,20 @@ namespace DropBeat
                 y[i] *= g * edge;
             }
             return y;
+        }
+
+        private AudioClip ToStereoClip(string name, float[] left, float[] right)
+        {
+            int n = Mathf.Max(left.Length, right.Length);
+            var data = new float[n * 2];
+            for (int i = 0; i < n; i++)
+            {
+                data[i * 2] = i < left.Length ? left[i] : 0f;
+                data[i * 2 + 1] = i < right.Length ? right[i] : 0f;
+            }
+            var clip = AudioClip.Create(name, n, 2, _sr, false);
+            clip.SetData(data, 0);
+            return clip;
         }
 
         private AudioClip ToClip(string name, float[] data)

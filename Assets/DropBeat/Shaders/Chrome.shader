@@ -1,8 +1,9 @@
 Shader "DropBeat/Chrome"
 {
-    // Polished metal ball. Reflects a procedural neon "studio" environment (no reflection probes or
-    // lights needed, so it reads as chrome even in a dark scene), with Schlick fresnel, sharp
-    // highlights that drive the bloom, and engraved glowing seams in object space so spin is visible.
+    // The ball. Default skin: polished metal reflecting a procedural neon "studio" environment (no
+    // reflection probes or lights needed), Schlick fresnel, sharp highlights that drive the bloom, and
+    // engraved glowing seams in object space so spin is visible. _Skin picks other looks: gold, black
+    // chrome, rose gold, plasma, lava, disco mirror ball, pixel, neon wireframe, planet.
     Properties
     {
         _BaseColor ("Metal Tint (F0)", Color) = (0.93, 0.94, 0.98, 1)
@@ -11,6 +12,7 @@ Shader "DropBeat/Chrome"
         _SeamWidth ("Seam Width", Range(0, 0.2)) = 0.03
         [HDR] _Flash ("Hit Flash", Color) = (0, 0, 0, 0)
         _Exposure ("Exposure", Float) = 1.25
+        _Skin ("Skin", Float) = 0
     }
 
     SubShader
@@ -34,6 +36,7 @@ Shader "DropBeat/Chrome"
                 half _SeamWidth;
                 half4 _Flash;
                 half _Exposure;
+                float _Skin;
             CBUFFER_END
 
             struct Attributes
@@ -87,28 +90,141 @@ Shader "DropBeat/Chrome"
                 return c;
             }
 
+            float Hash3(float3 p)
+            {
+                p = frac(p * 0.3183099 + 0.1);
+                p *= 17.0;
+                return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
+            }
+
+            float Noise3(float3 x)
+            {
+                float3 i = floor(x);
+                float3 f = frac(x);
+                f = f * f * (3.0 - 2.0 * f);
+                return lerp(lerp(lerp(Hash3(i), Hash3(i + float3(1, 0, 0)), f.x),
+                                 lerp(Hash3(i + float3(0, 1, 0)), Hash3(i + float3(1, 1, 0)), f.x), f.y),
+                            lerp(lerp(Hash3(i + float3(0, 0, 1)), Hash3(i + float3(1, 0, 1)), f.x),
+                                 lerp(Hash3(i + float3(0, 1, 1)), Hash3(i + float3(1, 1, 1)), f.x), f.y), f.z);
+            }
+
+            float3 Metal(float3 n, float3 v, float3 f0, float exposure)
+            {
+                float3 r = reflect(-v, n);
+                float ndv = saturate(dot(n, v));
+                float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+                return Environment(r) * fresnel * exposure;
+            }
+
+            float Seams(float3 no, float w, out float groove)
+            {
+                float seamA = 1.0 - smoothstep(w * 0.45, w, abs(no.y));
+                float seamB = 1.0 - smoothstep(w * 0.45, w, abs(no.x));
+                groove = 1.0 - smoothstep(w, w * 2.2, min(abs(no.y), abs(no.x)));
+                return saturate(seamA + seamB);
+            }
+
             half4 frag(Varyings i) : SV_Target
             {
                 float3 n = normalize(i.normalWS);
                 float3 v = normalize(i.viewWS);
-                float3 r = reflect(-v, n);
                 float ndv = saturate(dot(n, v));
-
-                float3 f0 = _BaseColor.rgb;
-                float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
-                float3 col = Environment(r) * fresnel * _Exposure;
-
-                // Engraved seams: equator + one meridian in object space (they turn with the ball).
+                float rim = pow(1.0 - ndv, 2.0);
                 float3 no = normalize(i.normalOS);
                 float w = max(1e-4, _SeamWidth);
-                float seamA = 1.0 - smoothstep(w * 0.45, w, abs(no.y));
-                float seamB = 1.0 - smoothstep(w * 0.45, w, abs(no.x));
-                float seam = saturate(seamA + seamB);
-                float groove = 1.0 - smoothstep(w, w * 2.2, min(abs(no.y), abs(no.x)));
-                col *= 1.0 - 0.55 * groove;               // dark groove around the seam
-                col += _SeamColor.rgb * seam * 0.9;        // glowing line inside it
+                float t = _Time.y;
+                int skin = (int)round(_Skin);
+                float3 col;
+                float groove;
 
-                col += _Flash.rgb * (0.35 + 0.65 * pow(1.0 - ndv, 2.0));
+                if (skin == 4)
+                {
+                    // Plasma: dark glass shell, swirling energy inside, bright rim.
+                    float3 q = no * 2.2 + float3(0.0, t * 0.6, t * 0.35);
+                    float e = Noise3(q) * 0.65 + Noise3(q * 2.3 + 4.1) * 0.35;
+                    float filaments = pow(1.0 - abs(e * 2.0 - 1.0), 6.0);
+                    col = Metal(n, v, float3(0.04, 0.04, 0.05), _Exposure) * 0.6;
+                    col += _Accent.rgb * (0.12 + 0.9 * filaments) * (0.6 + 0.4 * ndv);
+                    col += _Accent.rgb * rim * 0.6;
+                }
+                else if (skin == 5)
+                {
+                    // Lava: dark cooled rock with glowing cracks that pulse.
+                    float3 q = no * 3.0;
+                    float c1 = abs(Noise3(q) * 2.0 - 1.0);
+                    float c2 = abs(Noise3(q * 2.1 + 7.3) * 2.0 - 1.0);
+                    float crack = 1.0 - smoothstep(0.0, 0.12, min(c1, c2 * 1.3));
+                    float heat = 0.75 + 0.25 * sin(t * 3.0 + no.y * 4.0);
+                    float3 rock = float3(0.06, 0.035, 0.03) * (0.4 + 0.6 * saturate(dot(n, normalize(float3(-0.4, 0.8, -0.4)))));
+                    col = rock + Metal(n, v, float3(0.03, 0.03, 0.03), _Exposure) * 0.35;
+                    col += float3(3.0, 0.9, 0.15) * crack * heat;
+                    col += float3(1.6, 0.35, 0.05) * rim * 0.35;
+                }
+                else if (skin == 6)
+                {
+                    // Disco: mirror tiles in object space (they turn with the spin), dark grout, sparkles.
+                    float lat = asin(clamp(no.y, -1.0, 1.0));
+                    float lon = atan2(no.z, no.x);
+                    float rows = 10.0;
+                    float cl = (floor(lat / 3.14159 * rows) + 0.5) / rows * 3.14159;
+                    float cols = max(4.0, floor(rows * 2.0 * cos(cl)));
+                    float cn = (floor(lon / 6.28318 * cols) + 0.5) / cols * 6.28318;
+                    float3 tileOS = float3(cos(cl) * cos(cn), sin(cl), cos(cl) * sin(cn));
+                    float3 tn = normalize(TransformObjectToWorldNormal(tileOS));
+                    col = Metal(tn, v, float3(0.9, 0.9, 0.95), _Exposure * 1.15);
+                    float fl = frac(lat / 3.14159 * rows), fn = frac(lon / 6.28318 * cols);
+                    float grout = step(0.08, fl) * step(fl, 0.92) * step(0.08, fn) * step(fn, 0.92);
+                    col *= 0.25 + 0.75 * grout;
+                    float id = Hash3(floor(float3(lat * 40.0, lon * 40.0, floor(t * 8.0))));
+                    col += float3(3.0, 3.0, 3.2) * step(0.985, id) * grout;
+                }
+                else if (skin == 7)
+                {
+                    // Pixel: chunky voxel facets with a posterised palette (the 8-bit ball).
+                    float3 qn = normalize(round(no * 2.0));
+                    float3 pn = normalize(TransformObjectToWorldNormal(qn));
+                    float3 base = lerp(_Accent.rgb * 0.18, float3(1.0, 1.0, 1.0), step(0.5, Hash3(round(no * 2.0) + 3.0)) * 0.15);
+                    float light = saturate(dot(pn, normalize(float3(-0.5, 0.8, -0.4))));
+                    col = base * (0.35 + 0.9 * light) + Metal(pn, v, float3(0.5, 0.5, 0.55), _Exposure) * 0.35;
+                    col = floor(col * 6.0 + 0.5) / 6.0;
+                }
+                else if (skin == 8)
+                {
+                    // Neon wire: matte dark sphere with a glowing latitude / longitude grid.
+                    float lat = asin(clamp(no.y, -1.0, 1.0)) / 3.14159 * 8.0;
+                    float lon = atan2(no.z, no.x) / 6.28318 * 12.0;
+                    float gl = min(abs(frac(lat) - 0.5), abs(frac(lon) - 0.5));
+                    col = float3(0.02, 0.02, 0.035) + Metal(n, v, float3(0.05, 0.05, 0.06), _Exposure) * 0.4;
+                    col += _Accent.rgb * (1.0 - smoothstep(0.02, 0.08, gl)) * 1.1;
+                    col += _Accent.rgb * rim * 0.4;
+                }
+                else if (skin == 9)
+                {
+                    // Planet: oceans and continents (3D noise on the object), clouds, atmosphere glow.
+                    float h = Noise3(no * 2.4) * 0.6 + Noise3(no * 5.1 + 2.0) * 0.3 + Noise3(no * 11.0) * 0.1;
+                    float land = smoothstep(0.5, 0.53, h);
+                    float3 ocean = float3(0.02, 0.09, 0.32);
+                    float3 ground = lerp(float3(0.08, 0.22, 0.05), float3(0.32, 0.25, 0.12), smoothstep(0.55, 0.7, h));
+                    ground = lerp(ground, float3(0.85, 0.88, 0.95), smoothstep(0.82, 0.9, abs(no.y))); // ice caps
+                    float light = saturate(dot(n, normalize(float3(-0.6, 0.6, -0.5)))) * 0.85 + 0.15;
+                    col = lerp(ocean, ground, land) * light * 1.6;
+                    col += Metal(n, v, float3(0.04, 0.04, 0.05), _Exposure) * (1.0 - land) * 0.5; // sea glint
+                    float cloud = smoothstep(0.55, 0.75, Noise3(no * 3.3 + float3(t * 0.05, 0.0, t * 0.03)));
+                    col = lerp(col, float3(0.9, 0.92, 1.0) * light * 1.4, cloud * 0.8);
+                    col += float3(0.25, 0.55, 1.6) * pow(1.0 - ndv, 3.0) * 1.2;
+                }
+                else
+                {
+                    // Metals: chrome (0), gold (1), black chrome (2), rose gold (3). Tint comes from _BaseColor.
+                    float3 f0 = _BaseColor.rgb;
+                    col = Metal(n, v, f0, _Exposure);
+                    if (skin == 1 || skin == 3) col *= lerp(float3(1.0, 1.0, 1.0), f0 * 1.15, 0.55); // warm the reflections
+                    float seam = Seams(no, w, groove);
+                    col *= 1.0 - 0.55 * groove;
+                    col += _SeamColor.rgb * seam * (skin == 2 ? 1.6 : 0.9);
+                }
+
+                col += _Flash.rgb * (0.35 + 0.65 * rim);
                 return half4(col, 1.0);
             }
             ENDHLSL

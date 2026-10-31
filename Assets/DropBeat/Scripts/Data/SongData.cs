@@ -10,6 +10,42 @@ namespace DropBeat
         Hard = 2
     }
 
+    /// <summary>Background scene drawn behind a song (see the DropBeat/Backdrop shader).</summary>
+    public enum BackdropScene
+    {
+        Synthwave = 0,
+        Outrun,
+        Aurora,
+        Skyline,
+        MistyMountains,
+        Pixel,
+        Ocean,
+        Petals,
+        Volcano,
+        Galaxy,
+        Jungle,
+        Disco,
+        Dunes
+    }
+
+    /// <summary>The instrument a song's hit sounds are played with (see SfxPlayer.Voices).</summary>
+    public enum HitStyle
+    {
+        Classic = 0,
+        AnalogPluck,
+        GlassBell,
+        Zap,
+        Koto,
+        ChipBlip,
+        Darbuka,
+        SonarPing,
+        Chime,
+        Anvil,
+        SupersawStab,
+        Marimba,
+        Clav
+    }
+
     /// <summary>
     /// One playable song: the audio clip plus the beat grid produced by <see cref="BeatAnalyzer"/>.
     /// Charts are generated from the grid at load time, so every note sits exactly on a beat or half-beat.
@@ -25,6 +61,32 @@ namespace DropBeat
         [ColorUsage(false, true)] public Color accent = new Color(0f, 2.2f, 2.6f, 1f);
         [Tooltip("Where the menu preview starts playing, in seconds.")]
         public float previewTime = 30f;
+
+        [Header("Theme")]
+        [Tooltip("Background scene.")]
+        public BackdropScene scene = BackdropScene.Synthwave;
+        [Tooltip("Instrument of the hit sounds.")]
+        public HitStyle hitStyle = HitStyle.Classic;
+        [Tooltip("Second colour: off-beat and swipe rings, grid and spectrum bars.")]
+        [ColorUsage(false, true)] public Color accent2 = new Color(2.6f, 0.35f, 1.9f, 1f);
+        public Color skyTop = new Color(0.045f, 0.012f, 0.085f, 1f);
+        public Color skyBottom = new Color(0.008f, 0.006f, 0.025f, 1f);
+        [ColorUsage(false, true)] public Color sunTop = new Color(2.4f, 1.3f, 0.35f, 1f);
+        [ColorUsage(false, true)] public Color sunBottom = new Color(2.2f, 0.25f, 1.0f, 1f);
+        [Tooltip("Nebula clouds.")]
+        public Color haze = new Color(0.4f, 0.05f, 0.45f, 1f);
+
+        [Header("Unlock")]
+        [Tooltip("Locked songs are unlocked by watching one rewarded ad (kept forever).")]
+        public bool locked;
+        /// <summary>Music gain in dB (never above 0) so every song plays at about the same loudness.</summary>
+        public float musicGainDb;
+        public float MusicGain => Mathf.Pow(10f, Mathf.Min(0f, musicGainDb) / 20f);
+        /// <summary>Key for the hit sounds when the detected key is wrong (-1 = use the detected key).</summary>
+        public int hitKeyRoot = -1;
+        public bool hitKeyMinor = true;
+        public int HitRoot => hitKeyRoot >= 0 ? hitKeyRoot : keyRoot;
+        public bool HitMinor => hitKeyRoot >= 0 ? hitKeyMinor : keyMinor;
 
         [Header("Analysis overrides (re-analyse after changing)")]
         [Tooltip("Force this BPM instead of detecting it. 0 = auto.")]

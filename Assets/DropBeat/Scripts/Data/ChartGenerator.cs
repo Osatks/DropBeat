@@ -48,6 +48,8 @@ namespace DropBeat
         public bool moving;
         /// <summary>One of the song's big moments (a drop, a new section, its hardest hits): extra feedback.</summary>
         public bool impact;
+        /// <summary>Golden ring (Golden Rings twist): scores x5.</summary>
+        public bool golden;
     }
 
     /// <summary>
@@ -85,13 +87,16 @@ namespace DropBeat
             switch (d)
             {
                 case Difficulty.Easy:
-                    return new Rules { minGap = 0.62, targetGap = 1.35, maxGapBeats = 8, offbeats = false, gapWeight = 1.1 };
+                    return new Rules { minGap = 0.72, targetGap = 1.55, maxGapBeats = 8, offbeats = false, gapWeight = 1.1 };
                 case Difficulty.Hard:
-                    return new Rules { minGap = 0.2, targetGap = 0.46, maxGapBeats = 6, offbeats = true, gapWeight = 0.8 };
+                    return new Rules { minGap = 0.22, targetGap = 0.52, maxGapBeats = 6, offbeats = true, gapWeight = 0.8 };
                 default:
-                    return new Rules { minGap = 0.4, targetGap = 0.78, maxGapBeats = 8, offbeats = false, gapWeight = 0.9 };
+                    return new Rules { minGap = 0.46, targetGap = 0.92, maxGapBeats = 8, offbeats = false, gapWeight = 0.9 };
             }
         }
+
+        /// <summary>Shortest time between two taps on this difficulty, seconds.</summary>
+        public static double MinGap(Difficulty d) => For(d).minGap;
 
         private struct Candidate
         {

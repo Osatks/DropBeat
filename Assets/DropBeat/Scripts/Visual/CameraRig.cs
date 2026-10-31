@@ -119,6 +119,7 @@ namespace DropBeat
             _focus = focus;
             _focusVel = Vector3.zero;
             _crowd = _crowdTarget;
+            _roll = TwistRoll;
             Apply();
         }
 
@@ -128,7 +129,39 @@ namespace DropBeat
             Apply();
         }
 
+        /// <summary>Extra roll in degrees from the song's twist (drift banking, gravity flip, warp corkscrew).</summary>
+        public float TwistRoll { get; set; }
+
+        private float _roll; // applied roll, eased toward TwistRoll so a twist never ends with a jump
+
         public void Kick(float amount) => _kick = Mathf.Max(_kick, amount);
+
+        // Hit punches: a tiny nudge along the ball's travel that peaks ~29 ms after the hit and is gone by
+        // ~150 ms. Stateless (a function of time since each hit), applied after the follow smoothing.
+        private readonly float[] _punchAt = { -10f, -10f, -10f };
+        private readonly Vector3[] _punchDir = new Vector3[3];
+        private int _nextPunch;
+
+        public void Punch(Vector3 dir, float amp)
+        {
+            if (dir.sqrMagnitude < 1e-6f) return;
+            _punchAt[_nextPunch] = Time.unscaledTime;
+            _punchDir[_nextPunch] = dir.normalized * amp;
+            _nextPunch = (_nextPunch + 1) % _punchAt.Length;
+        }
+
+        private Vector3 PunchOffset()
+        {
+            Vector3 sum = Vector3.zero;
+            const float w = 35f;
+            for (int i = 0; i < _punchAt.Length; i++)
+            {
+                float tau = Time.unscaledTime - _punchAt[i];
+                if (tau < 0f || tau > 0.3f) continue;
+                sum += _punchDir[i] * (w * tau * Mathf.Exp(1f - w * tau));
+            }
+            return Vector3.ClampMagnitude(sum, 0.25f);
+        }
         public void Shake(float amount) => _shake = Mathf.Max(_shake, amount);
 
         private void Apply()
@@ -148,10 +181,11 @@ namespace DropBeat
             }
 
             float scale = DistanceScale * (1f + 0.14f * Mathf.SmoothStep(0f, 1f, _crowd));
-            float roll = _overdrive * 3.2f * Mathf.Sin(Time.unscaledTime * 2.1f);
+            _roll = Mathf.MoveTowardsAngle(_roll, TwistRoll, dt * 540f);
+            float roll = _overdrive * 3.2f * Mathf.Sin(Time.unscaledTime * 2.1f) + _roll;
             Quaternion rot = Quaternion.Euler(_pose.pitch, _pose.yaw, roll);
             Vector3 target = _focus + new Vector3(0f, _pose.ahead * scale, 0f);
-            transform.position = target - rot * Vector3.forward * (_pose.distance * scale) + new Vector3(0f, _pose.lift * scale, 0f) + shake;
+            transform.position = target - rot * Vector3.forward * (_pose.distance * scale) + new Vector3(0f, _pose.lift * scale, 0f) + shake + PunchOffset();
             transform.rotation = rot;
             Cam.fieldOfView = baseFov - _kick * 2.2f + _overdrive * 5f;
         }

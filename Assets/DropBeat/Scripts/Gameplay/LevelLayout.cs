@@ -22,6 +22,18 @@ namespace DropBeat
         public float moveDir;
         public double movePeriod;
 
+        // Song twist effects (see TwistDesigner.Decorate).
+        public bool golden;
+        /// <summary>Ring colour override (gold rings, boss rings); alpha 0 = none.</summary>
+        public Color twistTint = Color.clear;
+        /// <summary>Approach time multiplier (below 1 = the ring rushes in).</summary>
+        public float approachScale = 1f;
+        /// <summary>Only visible while it is the next target, or in a sonar ping.</summary>
+        public bool hidden;
+        public NoteFx fx;
+        /// <summary>How long before its beat the fx motion runs.</summary>
+        public double fxLead;
+
         /// <summary>Where the ring is exactly on the beat (the ball lands here).</summary>
         public Vector3 position;
         /// <summary>Ring orientation: turned to face the ball's direction of travel so it flies through.</summary>
@@ -47,11 +59,36 @@ namespace DropBeat
         /// <summary>Ring position at time t (moving rings sway and pass through <see cref="position"/> on the beat).</summary>
         public Vector3 PositionAt(double t)
         {
-            if (!moving || judged) return position;
-            float phase = (float)((t - time) / movePeriod) * Mathf.PI * 2f;
-            return position + new Vector3(moveDir * 0.85f * Mathf.Sin(phase), 0.25f * Mathf.Sin(phase * 2f), 0f);
+            if (judged) return position;
+            Vector3 p = position;
+            if (moving)
+            {
+                float phase = (float)((t - time) / movePeriod) * Mathf.PI * 2f;
+                p += new Vector3(moveDir * 0.85f * Mathf.Sin(phase), 0.25f * Mathf.Sin(phase * 2f), 0f);
+            }
+            if (fx != NoteFx.None && t < time && fxLead > 0.0)
+            {
+                // u: 1 at the start of the motion (or earlier), 0 on the beat, so the ring always ends on its spot.
+                float u = Mathf.Clamp01((float)((time - t) / fxLead));
+                if (fx == NoteFx.Mirage)
+                {
+                    // Waits on the mirrored side of the screen, then slides across to its real spot.
+                    float f = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.15f, 0.75f, u));
+                    p.x -= 2f * position.x * f;
+                    p.y += 0.25f * Mathf.Sin(u * Mathf.PI) * f;
+                }
+                else if (fx == NoteFx.Petal)
+                {
+                    // Drifts down from above, swaying like a falling petal.
+                    p.y += 2.6f * u * u;
+                    p.x += 0.6f * Mathf.Sin(u * Mathf.PI * 3f) * u;
+                }
+            }
+            return p;
         }
     }
+
+    public enum NoteFx : byte { None, Mirage, Petal }
 
     /// <summary>A ball's route through time: a list of segments (arc, rail grind, dash).</summary>
     public sealed class BallPath
@@ -158,7 +195,7 @@ namespace DropBeat
             var src = chart.notes;
             if (src.Count == 0) return;
 
-            var rng = new System.Random(seed);
+            // The map is designed (MapDesigner), not random: the same song always gets the same rings.
             float spb = song.SecondsPerBeat;
             float W = HalfWidth;
 
@@ -180,44 +217,51 @@ namespace DropBeat
                        (k > 0 && t - companionTimes[k - 1] <= shareWindow);
             }
             float lead = spb * Mathf.Max(1, Mathf.CeilToInt(0.55f / spb));
-            PadLeaveTime = main[0].time - lead;
+            // Leave the pad on a beat of the grid (the pad hop lands on the grid), never too close to the first ring.
+            int padBeat = song.BeatIndexAt(main[0].time - lead + 1e-6);
+            PadLeaveTime = song.BeatTime(padBeat);
+            if (main[0].time - PadLeaveTime < 0.3) PadLeaveTime = song.BeatTime(padBeat - 1);
             PadPosition = Vector3.zero;
 
             // ---- main ring positions
             var mainNotes = new List<PlayNote>(main.Count);
             var mainLanding = new List<Vector3>(main.Count);   // where the main ball lands
             var mainLeave = new List<Vector3>(main.Count);     // where it leaves from (rail end for holds)
-            float x = 0f, y = 0f;
-            float dir = rng.NextDouble() < 0.5 ? -1f : 1f;
+            float x = 0f, y = 0f, z = 0f;
             double prevTime = PadLeaveTime;
             SwipeDir pendingDash = SwipeDir.None;
             int movingCount = 0;
-            float zSide = 1f;
+            // Designed map, no randomness: each phrase draws a shape from the song's own palette.
+            MapPattern[] plan = MapDesigner.PlanPhrases(song, chart);
 
             for (int i = 0; i < main.Count; i++)
             {
                 ChartNote c = main[i];
                 bool shared = Shared(c.time);
                 float lim = shared ? W * CentreLane : W;
+                // Next to companion balls the main ball must stay in its centre lane: a split ring or a
+                // swipe dash would reach into the companions' outer lanes, so play those as plain taps.
+                if (shared && (c.type == NoteType.Dual || c.type == NoteType.Swipe))
+                {
+                    c.type = NoteType.Tap;
+                    c.swipe = SwipeDir.None;
+                }
                 float gap = (float)(c.time - prevTime);
-                // Rings alternate left and right with wide, low hops, so each ring launches the ball
-                // diagonally across the screen (the ring faces its launch, see FacingFor).
                 float rise = Mathf.Clamp(0.7f + gap * 1.3f, 0.9f, 2.6f);
-                float amp = lim * Mathf.Clamp(0.35f + gap * 0.9f, 0.35f, 1f) * (0.75f + 0.25f * (float)rng.NextDouble());
-                if (c.kind == NoteKind.Offbeat) amp *= 0.6f;
-                if (i == 0) amp *= 0.5f;
-                dir = -dir;
+                float prevX = x, prevZ = z;
 
-                if (pendingDash == SwipeDir.Left) { x -= Mathf.Max(2.8f, amp); rise *= 0.6f; }
-                else if (pendingDash == SwipeDir.Right) { x += Mathf.Max(2.8f, amp); rise *= 0.6f; }
+                // Where the design puts this beat (see MapDesigner); impact notes take centre stage.
+                Vector2 place = MapDesigner.Place(song, plan, c.time, out _);
+                float designedX = c.impact ? 0f : place.x * lim;
+                if (pendingDash == SwipeDir.Left) { x -= 2.8f; rise *= 0.6f; }
+                else if (pendingDash == SwipeDir.Right) { x += 2.8f; rise *= 0.6f; }
                 else if (pendingDash == SwipeDir.Up) { rise += 1.8f; }
-                else x = dir * amp;
+                else x = designedX;
                 pendingDash = SwipeDir.None;
 
-                // Depth: in the angled and tunnel views the path also zigzags toward and away from the
-                // camera, so those views show a real 3D route (the side view stays flat and readable).
-                float z = shared ? 0f : DepthFor(chart, c.time) * zSide * (0.7f + 0.3f * (float)rng.NextDouble());
-                zSide = -zSide;
+                // Depth: in the angled and tunnel views the route also moves toward and away from the
+                // camera (spirals in the tunnel); the side view stays flat and readable.
+                z = shared ? 0f : DepthFor(chart, c.time) * place.y;
 
                 // Swipe rings sit on the opposite side so the dash has room.
                 if (c.type == NoteType.Swipe)
@@ -227,16 +271,21 @@ namespace DropBeat
                     pendingDash = c.swipe;
                 }
 
-                if (x > lim) { x = lim - (x - lim); dir = -1f; }
-                else if (x < -lim) { x = -lim + (-lim - x); dir = 1f; }
+                if (x > lim) x = lim - (x - lim);
+                else if (x < -lim) x = -lim + (-lim - x);
                 x = Mathf.Clamp(x, -lim, lim);
+                // Dual rings: the main ball lands in the left one; place it before the spacing check.
+                if (c.type == NoteType.Dual) x = Mathf.Clamp(x, -W + 1.6f, W - 1.6f) - 1.6f;
+                // Never crowd two rings: keep at least MinRingGap between consecutive centres.
+                float dx = x - prevX, dz = z - prevZ;
+                rise = Mathf.Max(rise, Mathf.Sqrt(Mathf.Max(0f, MinRingGap * MinRingGap - dx * dx - dz * dz)));
                 y += rise;
 
                 float scale = c.kind == NoteKind.Downbeat ? 1.15f : c.kind == NoteKind.Offbeat ? 0.8f : 1f;
                 if (c.impact) scale = 1.35f;
                 if (c.type == NoteType.Dual)
                 {
-                    float cx = Mathf.Clamp(x, -W + 1.6f, W - 1.6f);
+                    float cx = x + 1.6f;
                     var left = NewNote(c, new Vector3(cx - 1.6f, y, z), scale);
                     var right = NewNote(c, new Vector3(cx + 1.6f, y, z), scale);
                     left.side = TapSide.Left;
@@ -344,8 +393,8 @@ namespace DropBeat
                 foreach (var c in kv.Value)
                 {
                     Vector3 m = path.Evaluate(c.time, out _);
-                    float s = ballId == 3 ? -side * (prev != null && prev.position.x > m.x ? -1f : 1f) : side;
-                    float cx = s * (W + 0.4f); // outer lane on this ball's side
+                    // Balls 1 and 2: the outer lanes; ball 3 (Spirit Balls on Hard): its own far-left lane.
+                    float cx = ballId == 3 ? -(W + 1.8f) : side * (W + 0.4f);
                     var n = NewNote(c, new Vector3(cx, m.y + 0.6f, 0f), 0.85f);
                     n.tint = tint;
                     Notes.Add(n);
@@ -371,6 +420,7 @@ namespace DropBeat
             // ---- ring facing: every ring is a launcher. Its axis is exactly the ball's launch direction,
             // so the ball always shoots out orthogonal to the ring's plane (in 3D as well).
             foreach (PlayNote n in Notes) n.facing = FacingFor(LaunchDirection(n));
+            TwistDesigner.Decorate(song, chart, Notes);
 
             Notes.Sort((a, b) => a.time != b.time ? a.time.CompareTo(b.time) : ((int)a.side).CompareTo((int)b.side));
             int holds = 0;
@@ -384,6 +434,8 @@ namespace DropBeat
 
         /// <summary>Depth of the zigzag toward / away from the camera while the camera is angled or in the tunnel.</summary>
         private const float PathDepth = 1.7f;
+        /// <summary>Smallest distance between consecutive ring centres (rings are about 1.6 wide).</summary>
+        private const float MinRingGap = 1.9f;
 
         private static float DepthFor(Chart chart, double t)
         {
@@ -441,6 +493,7 @@ namespace DropBeat
                 ball = c.ball,
                 moving = c.moving,
                 impact = c.impact,
+                golden = c.golden,
                 endTime = c.type == NoteType.Hold ? c.endTime : c.time,
                 position = pos,
                 railEnd = pos,

@@ -1,7 +1,8 @@
 Shader "DropBeat/NeonAdditive"
 {
     // Additive glow for lines, halos, particles and the backdrop.
-    // _Soft = 1 turns a quad into a soft round glow using its UVs (no texture needed).
+    // _Soft = 1 turns a quad into a soft round glow using its UVs (no texture needed); 2 softens only across
+    // the width, for trails and lines whose UVs run along their length.
     Properties
     {
         [HDR] _Color ("Color", Color) = (1, 1, 1, 1)
@@ -61,7 +62,8 @@ Shader "DropBeat/NeonAdditive"
                 if (_Soft > 0.5h)
                 {
                     float2 d = i.uv * 2.0 - 1.0;
-                    a = saturate(1.0 - dot(d, d));
+                    // 1 = round glow (quads, particles); 2 = soft across the width only (trails, lines).
+                    a = _Soft > 1.5h ? saturate(1.0 - d.y * d.y) : saturate(1.0 - dot(d, d));
                     a = pow(a, _SoftPower);
                 }
                 half3 c = i.color.rgb * _Color.rgb * (a * i.color.a * _Color.a);

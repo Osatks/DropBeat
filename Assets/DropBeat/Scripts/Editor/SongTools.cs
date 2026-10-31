@@ -57,6 +57,12 @@ namespace DropBeat.EditorTools
                 {
                     AnalyzeSong(song);
                 }
+                catch (Exception e)
+                {
+                    // One bad clip (too short, unreadable) must not stop the others or the library update.
+                    Debug.LogError("[DropBeat] Could not analyse " + name + ": " + e.Message);
+                    continue;
+                }
                 finally
                 {
                     EditorUtility.ClearProgressBar();
@@ -311,10 +317,12 @@ namespace DropBeat.EditorTools
             {
                 if (song.kickStrength[k] < 0.5f) continue;
                 float t = song.beatTimes[k];
-                int c = (int)(t * 1000f);
+                // Frame of the beat in the real hop timebase (hop is sr/1000 rounded down, not exactly 1 ms).
+                int c = (int)Math.Round((t * sr - win * 0.5) / hop);
+                int radius = (int)Math.Round(0.030 * sr / hop);
                 int bestF = -1;
                 float best = 0f;
-                for (int f = Math.Max(2, c - 30); f <= Math.Min(frames - 1, c + 30); f++)
+                for (int f = Math.Max(2, c - radius); f <= Math.Min(frames - 1, c + radius); f++)
                 {
                     float d = le[f] - le[f - 2];
                     if (d > best)

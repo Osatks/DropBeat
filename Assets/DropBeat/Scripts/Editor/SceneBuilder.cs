@@ -59,6 +59,7 @@ namespace DropBeat.EditorTools
             cam.farClipPlane = 250f;
             cam.allowHDR = true;
             camGo.AddComponent<AudioListener>();
+            camGo.AddComponent<MixBus>();
             var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
             camData.renderPostProcessing = true;
             camData.antialiasing = AntialiasingMode.FastApproximateAntialiasing; // cheap on phones

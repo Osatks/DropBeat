@@ -16,7 +16,7 @@ namespace DropBeat
     /// overdrive, reactive music (muffle on miss, extra layers on combo) and camera perspective shifts.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class GameController : MonoBehaviour
+    public sealed partial class GameController : MonoBehaviour
     {
         public enum State { Menu, Playing, Paused, Resuming, Failing, Results, Calibrating }
 
@@ -41,6 +41,8 @@ namespace DropBeat
         private const int OverdriveBeats = 16;
 
         private readonly LevelLayout _layout = new LevelLayout();
+        private readonly TwistDirector _twists = new TwistDirector();
+        private AudioClip _previewClip;
         private readonly List<RingView> _ringPool = new List<RingView>(48);
         private readonly List<BallView> _extraBalls = new List<BallView>(6);
         private readonly Dictionary<BallPath, BallView> _ballFor = new Dictionary<BallPath, BallView>();
@@ -122,7 +124,9 @@ namespace DropBeat
             // Phones default to 30 fps. Ask for 120: ProMotion / 120 Hz phones run at 120, the OS caps others
             // at their display rate (60 or 90). Never dim mid-song.
             Application.targetFrameRate = Mathf.Max(120, Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value));
-            Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            // Phones would otherwise start on a lower quality level (lower-resolution textures, fewer particles).
+            int high = System.Array.IndexOf(QualitySettings.names, "High");
+            if (high >= 0) QualitySettings.SetQualityLevel(high, true);
 #elif !UNITY_EDITOR
             // Smooth motion; judging uses input-event timestamps, so frame pacing never affects scores.
             QualitySettings.vSyncCount = 1;
@@ -144,10 +148,13 @@ namespace DropBeat
 
             if (ringRoot == null) ringRoot = new GameObject("Rings").transform;
             _burst = HitBurst.Create(transform, visuals.softAdditive);
+            _impactFx = ImpactFX.Create(transform, visuals.softAdditive);
+            MixBus.Ensure();
             BuildPad();
             background.Init(visuals, cameraRig, clock.Music);
             background.Beat += OnBeat;
             ui.Init(this);
+            Ads.ShowingChanged += OnAdShowing;
 
             SelectedSong = Mathf.Clamp(GameSettings.SongIndex, 0, Mathf.Max(0, (library != null ? library.songs.Count : 1) - 1));
             SelectedDifficulty = GameSettings.Difficulty;
@@ -156,11 +163,106 @@ namespace DropBeat
 
         private void Start()
         {
+            Ads.Init();
+            ball.SetSkin(GameSettings.BallSkin);
+            ball.SetTrailEffect(GameSettings.Trail, visuals);
             EnterMenu();
+        }
+
+        /// <summary>The main ball (the locker panel renders its skin previews with the same material).</summary>
+        public BallView Ball => ball;
+
+        /// <summary>
+        /// Locker: equips an unlocked skin, otherwise plays a rewarded ad that counts toward its unlock
+        /// (<see cref="GameSettings.CosmeticAdsToUnlock"/> ads); the skin is equipped once it unlocks.
+        /// </summary>
+        public void SelectSkin(BallSkin skin)
+        {
+            if (Ads.Showing) return;
+            if (GameSettings.IsUnlocked(skin))
+            {
+                EquipSkin(skin);
+                sfx.PlayNow(sfx.UiClick, 0.6f);
+                return;
+            }
+            WatchAdToward(() => GameSettings.WatchedAdFor(skin) >= GameSettings.CosmeticAdsToUnlock, () => EquipSkin(skin));
+        }
+
+        /// <summary>Locker: same as <see cref="SelectSkin"/> for trail effects.</summary>
+        public void SelectTrail(TrailEffect trail)
+        {
+            if (Ads.Showing) return;
+            if (GameSettings.IsUnlocked(trail))
+            {
+                EquipTrail(trail);
+                sfx.PlayNow(sfx.UiClick, 0.6f);
+                return;
+            }
+            WatchAdToward(() => GameSettings.WatchedAdFor(trail) >= GameSettings.CosmeticAdsToUnlock, () => EquipTrail(trail));
+        }
+
+        private void EquipSkin(BallSkin skin)
+        {
+            GameSettings.BallSkin = skin;
+            GameSettings.Save();
+            ball.SetSkin(GameSettings.BallSkin);
+            ui.RefreshMenu();
+        }
+
+        private void EquipTrail(TrailEffect trail)
+        {
+            GameSettings.Trail = trail;
+            GameSettings.Save();
+            ball.SetTrailEffect(GameSettings.Trail, visuals);
+            ui.RefreshMenu();
+        }
+
+        /// <summary>
+        /// Plays one rewarded ad. If the reward is earned, <paramref name="countAndCheck"/> records it and
+        /// returns true when that completes the unlock (then <paramref name="onUnlocked"/> runs).
+        /// </summary>
+        private void WatchAdToward(System.Func<bool> countAndCheck, System.Action onUnlocked)
+        {
+            if (!Ads.RewardedReady)
+            {
+                ui.ShowToast("Ad not ready yet, try again in a moment");
+                return;
+            }
+            Ads.Rewarded(result =>
+            {
+                if (result != Ads.RewardResult.Earned)
+                {
+                    ui.ShowToast(result == Ads.RewardResult.Failed ? "Ad not ready yet, try again in a moment" : "Watch the whole ad to count it");
+                    ui.RefreshMenu();
+                    return;
+                }
+                if (countAndCheck())
+                {
+                    onUnlocked?.Invoke();
+                    sfx.PlayNow(sfx.Fanfare, 0.7f);
+                    ui.ShowToast("Unlocked!");
+                }
+                else
+                {
+                    sfx.PlayNow(sfx.UiClick, 0.6f);
+                }
+                ui.RefreshMenu();
+            });
+        }
+
+        /// <summary>Settings: test mode unlocks everything and skips between-song ads.</summary>
+        public void ToggleTestMode()
+        {
+            GameSettings.TestMode = !GameSettings.TestMode;
+            ball.SetSkin(GameSettings.BallSkin);
+            ball.SetTrailEffect(GameSettings.Trail, visuals);
+            sfx.PlayNow(sfx.UiClick, 0.6f);
+            ui.RefreshMenu();
         }
 
         private void OnDestroy()
         {
+            Ads.ShowingChanged -= OnAdShowing;
             _input?.Dispose();
             GameSettings.Save();
         }
@@ -169,13 +271,28 @@ namespace DropBeat
         private void OnApplicationFocus(bool focus)
         {
             if (!focus && _state == State.Playing) PauseGame();
+            if (!focus && _state == State.Resuming)
+            {
+                // The countdown runs on realtime: back to the pause menu so the player resumes on purpose.
+                _state = State.Paused;
+                ui.Show(GameUI.Screen.Pause);
+                ui.SetResumeCountdown(string.Empty);
+            }
         }
 #endif
+
+        /// <summary>Ads pause all audio; in the menu the preview clock pauses with it so visuals stay on the music.</summary>
+        private void OnAdShowing(bool showing)
+        {
+            if (_state != State.Menu || !clock.IsRunning) return;
+            if (showing) clock.Pause();
+            else clock.Resume(0.05);
+        }
 
         private void ApplyAudioSettings()
         {
             clock.OutputLatency = GameSettings.OffsetMs * 0.001;
-            clock.Music.volume = GameSettings.MusicVolume;
+            clock.Music.volume = GameSettings.MusicVolume * MusicGainOf(CurrentSong);
             sfx.Volume = GameSettings.SfxVolume;
         }
 
@@ -196,7 +313,11 @@ namespace DropBeat
         private void EnterMenu()
         {
             _state = State.Menu;
+            _twists.End();
             ball.gameObject.SetActive(true);
+            ball.SetTrailWidth(1f);
+            Screen.sleepTimeout = SleepTimeout.SystemSetting;
+            _impactFx.Clear();
             ReleaseRings();
             HideExtraBalls();
             ResetMusicFx();
@@ -204,6 +325,7 @@ namespace DropBeat
             cameraRig.SetOverdrive(0f);
             cameraRig.SetCrowd(0f);
             background.SetOverdrive(0f);
+            background.SetPlaying(false);
             ui.Show(GameUI.Screen.Menu);
             StartPreview();
         }
@@ -216,14 +338,18 @@ namespace DropBeat
             ball.Teleport(Vector3.zero + new Vector3(0f, ball.Radius, 0f));
             _pad.position = Vector3.zero;
             cameraRig.Snap(MenuFocus);
+            background.Snap();
             background.ResetBeat();
             if (s == null || s.clip == null) return;
-            ball.SetAccent(s.accent);
-            background.SetAccent(s.accent);
-            sfx.SetKey(s.keyRoot, s.keyMinor);
+            ball.SetAccent(s.accent, s.accent2);
+            background.SetTheme(s);
+            sfx.SetKey(s.HitRoot, s.HitMinor, s.hitStyle);
+            // Only the previewed (and playing) song stays decoded in memory.
+            if (_previewClip != null && _previewClip != s.clip && (_song == null || _previewClip != _song.clip)) _previewClip.UnloadAudioData();
+            _previewClip = s.clip;
             s.clip.LoadAudioData();
             clock.Play(s.clip, Mathf.Clamp(s.previewTime, 0f, Mathf.Max(0f, s.duration - 5f)), 0.15);
-            clock.Music.volume = GameSettings.MusicVolume * 0.75f;
+            clock.Music.volume = GameSettings.MusicVolume * 0.75f * s.MusicGain;
         }
 
         public void SelectSong(int index)
@@ -285,6 +411,7 @@ namespace DropBeat
 
         public void Play()
         {
+            if (Ads.Showing) return;
             SongData s = CurrentSong;
             if (s == null || s.clip == null || !s.IsAnalyzed)
             {
@@ -292,12 +419,28 @@ namespace DropBeat
                 return;
             }
 
+            if (!GameSettings.IsUnlocked(s))
+            {
+                UnlockSelectedSong();
+                return;
+            }
+
             StartSong(s, SelectedDifficulty, GameSettings.Autoplay);
+        }
+
+        /// <summary>Plays a rewarded ad; when the player earns the reward the selected song stays unlocked.</summary>
+        public void UnlockSelectedSong()
+        {
+            SongData s = CurrentSong;
+            if (s == null || GameSettings.IsUnlocked(s) || Ads.Showing) return;
+            WatchAdToward(() => GameSettings.WatchedAdFor(s) >= GameSettings.SongAdsToUnlock, null);
         }
 
         public void Retry()
         {
-            if (_song != null) StartSong(_song, _difficulty, _autoplay);
+            if (_song == null || Ads.Showing) return;
+            if (_state == State.Results) Ads.BetweenSongs(() => StartSong(_song, _difficulty, _autoplay));
+            else StartSong(_song, _difficulty, _autoplay);
         }
 
         public void StartSong(SongData song, Difficulty difficulty, bool autoplay)
@@ -307,12 +450,16 @@ namespace DropBeat
             _autoplay = autoplay;
             ball.gameObject.SetActive(true);
             ApplyAudioSettings();
-            sfx.SetKey(song.keyRoot, song.keyMinor);
+            sfx.SetKey(song.HitRoot, song.HitMinor, song.hitStyle);
+            sfx.PrepareStingers(song.bpm);
             if (song.clip.loadState != AudioDataLoadState.Loaded) song.clip.LoadAudioData();
 
             _chart = ChartDesigner.Design(song, difficulty);
-            float halfWidth = Mathf.Clamp(cameraRig.HalfWidthAtRings * 0.55f, 1.8f, 5f);
-            _layout.Build(song, _chart, halfWidth, song.name.GetHashCode() ^ ((int)difficulty * 7919));
+            // Fixed field width (what a portrait phone shows), not the live screen width, so the ring map
+            // is identical on every device and every play.
+            const float halfWidth = 2.5f;
+            // Stable seed: a song always gets the same ring map on every play and every device.
+            _layout.Build(song, _chart, halfWidth, ChartDesigner.StableHash(song.name) ^ ((int)difficulty * 7919));
             _score = new ScoreState(_layout.JudgementCount, difficulty);
             _windows = JudgeWindows.For(difficulty);
             _nextJudge = 0;
@@ -344,8 +491,8 @@ namespace DropBeat
             else startAt = System.Math.Min(startAt, -0.3);
 
             _pad.position = _layout.PadPosition;
-            ball.SetAccent(song.accent);
-            background.SetAccent(song.accent);
+            ball.SetAccent(song.accent, song.accent2);
+            background.SetTheme(song);
             background.ResetBeat();
             background.SetOverdrive(0f);
             cameraRig.SetMode(CameraMode.Side, 0f);
@@ -353,13 +500,19 @@ namespace DropBeat
             cameraRig.SetCrowd(0f);
             Vector3 p = _layout.BallAt(startAt, out _);
             ball.Teleport(p);
+            _twists.End(); // no roll left over from the last run (Restart from a flipped pause)
             cameraRig.Snap(new Vector3(p.x * 0.35f, p.y + 1.5f, 0f));
+            background.Snap();
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
-            clock.Music.volume = GameSettings.MusicVolume;
+            clock.Music.volume = GameSettings.MusicVolume * song.MusicGain;
             clock.Play(song.clip, startAt, 0.2);
             _state = State.Playing;
             ui.Show(GameUI.Screen.Hud);
             ui.SetupHud(song, difficulty, autoplay);
+            _twists.Begin(song, _chart, _layout, ui, cameraRig, background, sfx);
+            background.SetPlaying(true);
+            ResetFeel();
 
             if (logJudgements)
             {
@@ -370,8 +523,10 @@ namespace DropBeat
 
         public void ToMenu()
         {
+            if (Ads.Showing) return;
             sfx.PlayNow(sfx.UiClick, 0.6f);
-            EnterMenu();
+            if (_state == State.Results) Ads.BetweenSongs(EnterMenu);
+            else EnterMenu();
         }
 
         // ================================================================ pause
@@ -382,6 +537,9 @@ namespace DropBeat
             clock.Pause();
             sfx.StopScheduled();
             sfx.StopHold();
+            // A swipe waiting for its direction is dropped (its deadline is realtime); it can be swiped again after resume.
+            _swipeNote = null;
+            Screen.sleepTimeout = SleepTimeout.SystemSetting;
             _state = State.Paused;
             ui.Show(GameUI.Screen.Pause);
             ui.SetResumeCountdown(string.Empty);
@@ -415,7 +573,8 @@ namespace DropBeat
         private void HandleKeys()
         {
             var kb = Keyboard.current;
-            if (kb == null) return;
+            if (kb == null || Ads.Showing) return;
+            if (_state == State.Menu && ui.SheetOpen) return; // settings / style sheet has the focus
             switch (_state)
             {
                 case State.Menu:
@@ -513,13 +672,17 @@ namespace DropBeat
             TickOverdrive(t);
             TickMusicFx(t);
             TickCameraCues(t);
+            _twists.Tick(t);
+            TickFeel(t);
             ScheduleTicks();
             UpdateCountIn(t);
             UpdateHints(t);
             UpdateWorld(t);
-            ui.UpdateHud(_score, Progress(t), MeanErrorMs(), _windows);
-            ui.UpdateOverdrive(_overdrive, _overdriveOn);
+            float ph = BeatPhase(t);
+            ui.UpdateHud(_score, Progress(t), MeanErrorMs(), _windows, _tier, ph);
+            ui.UpdateOverdrive(_overdrive, _overdriveOn, ph);
 
+            if (_score.Health <= 0f) _healthHitZero = true;
             if (!_autoplay && !GameSettings.NoFail && _score.Health <= 0f)
             {
                 BeginFail();
@@ -570,6 +733,8 @@ namespace DropBeat
                     _swipeId = tap.id;
                     _swipePressSong = t;
                     _swipeDeadline = Time.realtimeSinceStartupAsDouble + SwipeWait;
+                    // Instant snap at touch-down; the grade, whoosh and smash follow once the direction is known.
+                    if (GameSettings.HitSound && System.Math.Abs(err) <= _windows.good) sfx.PlayNow(sfx.SwipeSnap, 0.5f);
                 }
                 else
                 {
@@ -670,7 +835,7 @@ namespace DropBeat
             {
                 Muffle(now);
                 ui.ShowJudgement(Grade.Miss, double.NaN, at, cameraRig.Cam, _windows, "BREAK");
-                if (GameSettings.HitSound) sfx.PlayHit(Grade.Miss, 0);
+                if (GameSettings.HitSound) sfx.PlayMiss();
             }
             else
             {
@@ -688,28 +853,47 @@ namespace DropBeat
             n.grade = grade;
             n.error = error;
             n.judgedAt = now;
-            _score.Register(grade, double.IsNaN(error) ? 0.0 : error, _overdriveOn ? 2 : 1);
+            int lost = _score.Combo;
+            int pts = _score.Register(grade, double.IsNaN(error) ? 0.0 : error, (_overdriveOn ? 2 : 1) * _twists.Multiplier(n, grade));
+            _score.Mark(n.time, grade);
+            _twists.OnJudged(n, grade, _score);
+            if (label == null) label = _twists.Label(n, grade);
+            if (_overdriveOn && pts > 0) _odBonus += pts / 2;
             while (_nextJudge < _layout.Notes.Count && _layout.Notes[_nextJudge].judged) _nextJudge++;
             if (n.type == NoteType.Hold && grade == Grade.Miss) JudgeTail(n, Grade.Miss, now);
 
-            if (n.view != null) n.view.OnJudged(grade, now);
+            if (n.view != null)
+            {
+                n.view.SetHitContext(_tier / 4f, _overdriveOn);
+                n.view.OnJudged(grade, now);
+            }
             Color c = visuals.GradeColor(grade);
-            Vector3 pos = n.PositionAt(now);
+            // Effects land where the ring is drawn (moving rings, mirages), not on its beat position.
+            Vector3 pos = n.view != null ? n.view.transform.position : n.PositionAt(now);
             if (grade != Grade.Miss)
             {
                 bool perfect = grade == Grade.Perfect;
-                int count = perfect ? 34 : grade == Grade.Great ? 22 : 12;
-                if (_overdriveOn) count = count * 3 / 2;
-                _burst.Emit(pos, n.ball > 0 ? n.tint : c, count);
+                bool great = grade == Grade.Great;
+                _perfectChain = perfect ? _perfectChain + 1 : 0;
+                Color col = n.ball > 0 ? n.tint : c;
+                if (_overdriveOn) col = Color.Lerp(col, new Color(2.6f, 0.6f, 2.2f, 1f), 0.5f);
+                int sparks = Mathf.Min(48, Mathf.RoundToInt((perfect ? 24 : great ? 14 : 0) * (1f + 0.25f * _tier)));
+                _burst.EmitSparks(pos, n.type == NoteType.Swipe ? Quaternion.identity : n.facing, 0.81f * n.scale, col, sparks);
+                _burst.Emit(pos, col, perfect ? 12 : 8);
+                if (perfect) _impactFx.Play(pos, now, _score.Combo >= 100 || _score.Perfect == _score.Judged ? 1.3f : 1f);
                 BallView bv = BallForNote(n);
-                if (bv != null) bv.Pulse(c, perfect ? 1f : 0.6f);
-                cameraRig.Kick(perfect ? 0.8f : 0.4f);
-                background.HitFlash(perfect ? 1f : 0.5f);
+                if (bv != null) bv.Pulse(perfect ? Color.Lerp(UIFactory.Gold, Color.white * 2f, 0.5f) : c, perfect ? 1f : great ? 0.6f : 0.35f);
+                cameraRig.Kick(perfect ? Mathf.Min(1.3f, 1f + 0.1f * _tier) : great ? 0.6f : 0.3f);
+                background.HitFlash(perfect ? 1f : great ? 0.6f : 0.3f);
+                Punch(n, perfect ? 0.10f : great ? 0.06f : 0.03f);
+                MixBus.Duck(perfect ? 4f : great ? 3f : 1.5f);
                 if (GameSettings.HitSound)
                 {
                     float pan = n.side == TapSide.Left ? -0.65f : n.side == TapSide.Right ? 0.65f : 0f;
-                    sfx.PlayHit(grade, _score.Combo, pan);
-                    if (n.ball > 0) sfx.PlayHarmony(_score.Combo, n.ball);
+                    int step = n.ball > 0 ? Mathf.Min(_lastStep + 2 * n.ball, 10) : RiffStep(n);
+                    sfx.PlayHit(grade, step, _tier, _overdriveOn, pan, _difficulty == Difficulty.Hard);
+                    if (n.ball > 0) sfx.PlayHarmony(_lastStep, n.ball);
+                    else _lastStep = step;
                     if (n.type == NoteType.Swipe)
                     {
                         sfx.PlayNow(sfx.Whoosh, 0.7f);
@@ -723,6 +907,8 @@ namespace DropBeat
                     cameraRig.Shake(0.45f);
                     background.HitFlash(1.6f);
                     _burst.Emit(pos, visuals.perfect, 70);
+                    Punch(n, 0.25f);
+                    MixBus.Duck(7f, 0.3f);
                     if (GameSettings.HitSound) sfx.PlayNow(sfx.Impact, 0.85f);
                 }
                 if (n.type == NoteType.Swipe)
@@ -730,27 +916,28 @@ namespace DropBeat
                     cameraRig.Kick(1.2f);
                     cameraRig.Shake(0.35f);
                     _burst.Emit(pos, visuals.great, 40);
+                    MixBus.Duck(7f, 0.3f);
                 }
-                ui.PunchCombo();
-                int combo = _score.Combo;
-                if (combo > 0 && combo % 50 == 0)
-                {
-                    ui.ShowMilestone(combo + " COMBO!");
-                    sfx.PlayNow(sfx.Fanfare, 0.5f);
-                }
+                ui.PunchCombo(grade);
+                ui.PunchScore();
+                int nt = TierOf(_score.Combo);
+                if (nt > _tier && nt != _pendingTier) QueueTierUp(nt, now);
                 AddOverdrive(grade);
             }
             else
             {
+                _perfectChain = 0;
                 BallView bv = BallForNote(n);
                 if (bv != null) bv.Pulse(c, 0.3f);
-                cameraRig.Shake(0.5f);
-                if (GameSettings.HitSound) sfx.PlayHit(Grade.Miss, 0);
-                Muffle(now);
+                MissFeel(n, lost);
                 if (!_overdriveOn) _overdrive = Mathf.Max(0f, _overdrive - 0.15f);
             }
+            SectionUpdate(n, grade, pts, now);
 
-            ui.ShowJudgement(grade, error, pos, cameraRig.Cam, _windows, label);
+            BallView owner = BallForNote(n);
+            int lane = n.ball > 0 ? n.ball : n.side == TapSide.Right ? 9 : 0;
+            ui.ShowJudgement(grade, error, owner != null ? owner.transform.position : pos, cameraRig.Cam, _windows, label, pts, _perfectChain, _overdriveOn, lane);
+            CheckFinale(pos, now);
             if (logJudgements)
             {
                 Debug.Log("[DropBeat] note#" + n.index + " " + n.type + (n.ball > 0 ? " ball" + n.ball : string.Empty) +
@@ -775,7 +962,12 @@ namespace DropBeat
             _overdriveOn = true;
             _overdriveStart = t;
             _overdriveEnd = _song.BeatTime(k + OverdriveBeats);
-            sfx.PlayNow(sfx.PowerUp, 0.8f);
+            _odBonus = 0;
+            // The power-up's boom (0.65 s into the clip) lands on a beat.
+            int b = k + 1;
+            while (clock.StartDsp + _song.BeatTime(b) - 0.65 < AudioSettings.dspTime + 0.03) b++;
+            _powerUpBeat = b;
+            sfx.PlayAt(sfx.PowerUp, clock.StartDsp + _song.BeatTime(b) - 0.65, 1f);
             ui.ShowMilestone("OVERDRIVE  x2");
             cameraRig.Kick(1.5f);
             background.HitFlash(1.5f);
@@ -783,23 +975,31 @@ namespace DropBeat
 
         private void TickOverdrive(double t)
         {
+            float floor = _twists.OverdriveFloor;
             if (!_overdriveOn)
             {
-                cameraRig.SetOverdrive(0f);
-                background.SetOverdrive(0f);
+                cameraRig.SetOverdrive(floor);
+                background.SetOverdrive(floor * 0.8f);
                 return;
             }
 
             double span = System.Math.Max(0.1, _overdriveEnd - _overdriveStart);
             _overdrive = Mathf.Clamp01((float)((_overdriveEnd - t) / span));
             float ramp = Mathf.Clamp01((float)(t - _overdriveStart) / 0.4f) * Mathf.Clamp01((float)(_overdriveEnd - t) / 0.4f);
-            cameraRig.SetOverdrive(ramp);
-            background.SetOverdrive(ramp);
+            cameraRig.SetOverdrive(Mathf.Max(ramp, floor));
+            background.SetOverdrive(Mathf.Max(ramp, floor * 0.8f));
             if (t >= _overdriveEnd)
             {
                 _overdriveOn = false;
                 _overdrive = 0f;
-                sfx.PlayNow(sfx.PowerDown, 0.6f);
+                if (_odBonus > 0)
+                {
+                    // Ends on a payout, not a deflating sweep.
+                    if (GameSettings.HitSound && !_finaleDone) sfx.PlayNow(sfx.TierSting(3), 0.6f);
+                    ui.ShowBanner("OVERDRIVE  +" + _odBonus.ToString("N0", CultureInfo.InvariantCulture), UIFactory.Gold, UIFactory.Pink, 2);
+                }
+                else sfx.PlayNow(sfx.PowerDown, 0.6f);
+                _odBonus = 0;
             }
         }
 
@@ -808,6 +1008,7 @@ namespace DropBeat
         private void ResetMusicFx()
         {
             _muffleAt = -100;
+            _muffleHz = 0f;
             if (_lpf != null) _lpf.cutoffFrequency = 22000f;
             if (_hpf != null) _hpf.cutoffFrequency = 10f;
             sfx.StopLayer();
@@ -815,25 +1016,33 @@ namespace DropBeat
 
         private void Muffle(double now)
         {
+            _muffleHz = 900f;
+            _muffleDur = 1f;
             _muffleAt = Time.realtimeSinceStartupAsDouble;
-            sfx.StopLayer();
+            sfx.FadeLayer(0.25f);
             _layerBeat = int.MinValue;
         }
 
         private void TickMusicFx(double t)
         {
-            // Underwater after a miss, clearing over ~1.3 s (log-frequency sweep back up).
-            float since = (float)(Time.realtimeSinceStartupAsDouble - _muffleAt);
-            float u = Mathf.Clamp01(since / 1.3f);
-            _lpf.cutoffFrequency = 650f * Mathf.Pow(22000f / 650f, u * u);
+            // After a big miss the song goes underwater and clears; it is always fully open again 150 ms
+            // before the next note, so the beat is there when the player needs it.
+            if (_muffleHz > 0f)
+            {
+                float since = (float)(Time.realtimeSinceStartupAsDouble - _muffleAt);
+                float ahead = (float)(NextPendingNoteTime(t) - t - 0.15);
+                float u = Mathf.Clamp01(Mathf.Max(since / _muffleDur, 1f - ahead / _muffleDur));
+                _lpf.cutoffFrequency = u >= 1f ? 22000f : _muffleHz * Mathf.Pow(22000f / _muffleHz, u * u);
+                if (u >= 1f) _muffleHz = 0f;
+            }
+            else _lpf.cutoffFrequency = 22000f;
 
-            // Overdrive swell: high-pass sweeps down from 2.5 kHz when it kicks in.
-            float od = _overdriveOn ? Mathf.Clamp01((float)(t - _overdriveStart) / 1.2f) : 1f;
-            _hpf.cutoffFrequency = _overdriveOn ? Mathf.Lerp(2500f, 10f, Mathf.Sqrt(od)) : 10f;
+            // Overdrive: a gentle high-pass swell over one beat (the kick stays audible).
+            _hpf.cutoffFrequency = _overdriveOn ? Mathf.Lerp(300f, 10f, Mathf.Clamp01((float)(t - _overdriveStart) / _song.SecondsPerBeat)) : 10f;
+            if (_state == State.Playing) clock.Music.volume = PlayingMusicVolume(t);
 
-            // Combo layers: claps on the backbeats from 24 combo, an arpeggio on eighths from 48.
-            int combo = _score.Combo;
-            if (combo < 24 || !GameSettings.HitSound)
+            // Streak layers: chord stabs on beats 2 and 4 from GROOVE, an eighth-note arpeggio from FEVER.
+            if (_tier < 1 || !GameSettings.HitSound || _finaleDone)
             {
                 _layerBeat = int.MinValue;
                 return;
@@ -850,12 +1059,12 @@ namespace DropBeat
                 if (dsp > dspNow + 0.01)
                 {
                     int pos = ((_layerBeat - _song.downbeatPhase) % 4 + 4) % 4;
-                    if (pos == 1 || pos == 3) sfx.PlayLayerAt(sfx.Clap, dsp, 0.45f);
-                    if (combo >= 48)
+                    if (pos == 1 || pos == 3) sfx.PlayLayerAt(sfx.Stab(pos == 1 ? 0 : 1), dsp, 0.6f);
+                    if (_tier >= 2)
                     {
                         double half = 0.5 * (_song.BeatTime(_layerBeat + 1) - bt);
-                        sfx.PlayLayerAt(sfx.ArpNote(_layerBeat * 2), dsp, 0.22f);
-                        sfx.PlayLayerAt(sfx.ArpNote(_layerBeat * 2 + 1), dsp + half, 0.18f);
+                        sfx.PlayLayerAt(sfx.ArpNote(_layerBeat * 2), dsp, 0.40f);
+                        sfx.PlayLayerAt(sfx.ArpNote(_layerBeat * 2 + 1), dsp + half, 0.32f);
                     }
                 }
                 _layerBeat++;
@@ -875,8 +1084,10 @@ namespace DropBeat
             }
             if (changed)
             {
-                cameraRig.SetMode(cues[_cueIndex].mode, _song.SecondsPerBeat * 2f);
-                sfx.PlayNow(sfx.Whoosh, 0.35f);
+                // Dance-cam cuts snap on the beat; phrase changes blend over two beats with a whoosh.
+                bool cut = cues[_cueIndex].cut;
+                cameraRig.SetMode(cues[_cueIndex].mode, cut ? 0.12f : _song.SecondsPerBeat * 2f);
+                if (!cut) sfx.PlayNow(sfx.Whoosh, 0.35f);
             }
         }
 
@@ -958,7 +1169,7 @@ namespace DropBeat
             }
         }
 
-        private float Fever => _score == null ? 0f : Mathf.Clamp01((_score.Combo - 20) / 80f) * 0.6f + (_overdriveOn ? 0.6f : 0f);
+        private float Fever => _score == null ? 0f : _tierVis * 0.15f + (_overdriveOn ? 0.6f : 0f);
 
         // ================================================================ world
 
@@ -966,8 +1177,9 @@ namespace DropBeat
         {
             Vector3 pos = _layout.BallAt(t, out _ballVelocity);
             ball.SetPose(pos, _ballVelocity);
-            ball.SetTrailWidth(1f + Fever * 0.6f);
+            ball.SetTrailWidth(1f + 0.15f * _tierVis + (_overdriveOn ? 0.36f : 0f));
             UpdateExtraBalls(t);
+            _impactFx.Tick(t, cameraRig.transform);
 
             BindRings(t);
             double approach = Mathf.Clamp(_song.SecondsPerBeat * 2f, 0.55f, 1.1f);
@@ -976,8 +1188,9 @@ namespace DropBeat
                 RingView v = _ringPool[i];
                 if (v.Free) continue;
                 PlayNote n = v.Note;
-                bool target = n != null && !n.judged && n.time - t <= approach * 1.05;
-                v.Tick(t, approach, target, Fever, ball.transform.position);
+                double ap = n != null ? approach * n.approachScale : approach; // surge rings rush in
+                bool target = n != null && !n.judged && n.time - t <= ap * 1.05;
+                v.Tick(t, ap, target, Fever, ball.transform.position);
             }
 
             TintPad(_song.accent, t < _layout.PadLeaveTime ? 0.9f : 0.25f, _song, t);
@@ -1062,7 +1275,10 @@ namespace DropBeat
                 bound++;
                 if (n.judged || n.view != null) continue;
                 RingView v = GetFreeRing();
-                v.Bind(n, n.ball > 0 ? n.tint : _song.accent);
+                Color acc = n.ball > 0 ? n.tint : _song.accent;
+                Color acc2 = _song.accent2;
+                if (n.twistTint.a > 0f) acc = acc2 = n.twistTint; // gold rings, boss rings
+                v.Bind(n, acc, acc2);
             }
         }
 
@@ -1106,7 +1322,8 @@ namespace DropBeat
 
         private void OnBeat(int beat, bool downbeat)
         {
-            if (_state == State.Playing || _state == State.Menu) cameraRig.Kick(downbeat ? 0.6f : 0.25f);
+            // While playing, hits drive the camera; the metronome kick stays as a light ambient pulse.
+            if (_state == State.Playing || _state == State.Menu) cameraRig.Kick((downbeat ? 0.6f : 0.25f) * (_state == State.Playing ? 0.4f : 1f));
         }
 
         private float Progress(double t)
@@ -1135,11 +1352,13 @@ namespace DropBeat
             {
                 ui.SetResumeCountdown(string.Empty);
                 ui.Show(GameUI.Screen.Hud);
+                Screen.sleepTimeout = SleepTimeout.NeverSleep;
                 clock.Resume(0.05);
                 // Re-arm assist ticks and combo layers from the resume point; holds resume as held.
                 double t = clock.SongTime;
                 _nextTick = _layout.FindNextNote(t);
                 _layerBeat = int.MinValue;
+                _requeueStings = true;
                 foreach (var h in _holds) h.holdId = -1;
                 _state = State.Playing;
             }
@@ -1150,8 +1369,11 @@ namespace DropBeat
         private void BeginFail()
         {
             _state = State.Failing;
+            _twists.End();
             _failTimer = 0f;
             _failVelocity = _ballVelocity;
+            _failProgress = Progress(clock.SongTime);
+            ui.UpdateOverdrive(0f, false);
             clock.Freeze();
             sfx.StopScheduled();
             sfx.StopHold();
@@ -1181,25 +1403,39 @@ namespace DropBeat
         private void FinishSong(bool failed)
         {
             _state = State.Results;
+            _twists.End();
             _resultsFade = 0f;
-            sfx.StopScheduled();
+            _impactFx.Clear();
+            if (!failed && _finaleVoice >= 0) sfx.StopScheduledExcept(_finaleVoice);
+            else sfx.StopScheduled();
             sfx.StopHold();
             sfx.StopLayer();
             _overdriveOn = false;
             cameraRig.SetOverdrive(0f);
             background.SetOverdrive(0f);
-            bool record = false;
-            string rank = _score.Rank(failed);
-            if (!_autoplay && !failed)
+            ui.UpdateOverdrive(0f, false);
+            ball.SetTrailWidth(1f);
+            Screen.sleepTimeout = SleepTimeout.SystemSetting;
+            if (!failed)
             {
-                record = GameSettings.SubmitBest(_song, _difficulty, _score.Score, _score.Accuracy, rank, _score.FullCombo);
+                // The music plays on under the results: open the miss / overdrive filters.
+                _lpf.cutoffFrequency = 22000f;
+                _hpf.cutoffFrequency = 10f;
             }
+            string rank = _score.Rank(failed);
+            // Every real run counts (fails too); autoplay never does. A NoFail run that hit zero life is not a clear.
+            var record = new GameSettings.RunRecord { before = GameSettings.GetBest(_song, _difficulty) };
+            record.after = record.before;
+            bool cleared = !failed && !_healthHitZero;
+            float progress = failed ? _failProgress : 1f;
+            if (!_autoplay) record = GameSettings.SubmitRun(_song, _difficulty, _score, rank, cleared, progress);
+            _resultsStartVolume = clock.Music.volume;
 
             _score.ErrorStats(out float mean, out float std, out float median);
             bool suggest = !_autoplay && _score.Errors.Count >= 20 && Mathf.Abs(median) >= 8f && std < 45f;
             _suggestedOffsetMs = Mathf.Round(median);
-            ui.ShowResults(_song, _difficulty, _score, failed, _autoplay, record, _suggestedOffsetMs, suggest);
-            sfx.PlayNow(failed ? sfx.Miss : sfx.Fanfare, 0.7f);
+            ui.ShowResults(_song, _difficulty, _score, failed, _autoplay, record, progress, _suggestedOffsetMs, suggest);
+            Ads.SongFinished();
 
             Debug.Log("[DropBeat] Result " + _song.title + " " + _difficulty + (_autoplay ? " (auto)" : string.Empty) +
                       ": " + rank + " score=" + _score.Score + " acc=" + (_score.Accuracy * 100f).ToString("F2", CultureInfo.InvariantCulture) +
@@ -1213,7 +1449,7 @@ namespace DropBeat
             _resultsFade += Time.unscaledDeltaTime;
             if (clock.IsRunning && !clock.IsFrozen)
             {
-                clock.Music.volume = GameSettings.MusicVolume * Mathf.Lerp(1f, 0.35f, Mathf.Clamp01(_resultsFade / 2.5f));
+                clock.Music.volume = _resultsStartVolume * Mathf.Lerp(1f, 0.35f, Mathf.Clamp01(_resultsFade / 2.5f));
                 double t = clock.SongTime;
                 Vector3 pos = _layout.BallAt(t, out Vector3 v);
                 ball.SetPose(pos, v);
@@ -1232,6 +1468,7 @@ namespace DropBeat
 
         public void StartCalibration()
         {
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
             clock.Stop();
             sfx.StopScheduled();
             ReleaseRings();
@@ -1275,6 +1512,7 @@ namespace DropBeat
             while (_input.TryDequeue(out TapInput.Tap tap))
             {
                 if (tap.kind != TapInput.Kind.Press || _calErrors.Count >= 32) continue;
+                if (tap.isPointer && ui.IsOverCalibrationButtons(tap.screenPosition)) continue; // Save / Back presses are not samples
                 double tapDsp = clock.DspAtRealtime(tap.realtime);
                 double rel = (tapDsp - _calStartDsp) / CalInterval;
                 int j = (int)System.Math.Round(rel);

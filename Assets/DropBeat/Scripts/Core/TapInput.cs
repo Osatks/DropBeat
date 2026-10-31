@@ -103,6 +103,14 @@ namespace DropBeat
             {
                 if (_down.Remove(control))
                 {
+                    // A fast flick can cross the swipe distance and lift before the next Poll: test the lift-off point.
+                    float threshold = Mathf.Min(Screen.width, Screen.height) * swipeThreshold;
+                    for (int i = 0; i < _gestures.Count; i++)
+                    {
+                        Gesture g = _gestures[i];
+                        if (g.id != id || g.swiped || t - g.startTime > swipeMaxTime) continue;
+                        TrySwipe(ref g, threshold);
+                    }
                     _gestures.RemoveAll(g => g.id == id);
                     if (Enabled) _queue.Enqueue(new Tap { kind = Kind.Release, realtime = t, id = id });
                 }
@@ -171,20 +179,27 @@ namespace DropBeat
                     continue;
                 }
 
-                Vector2 pos = g.mouse
-                    ? (Mouse.current != null ? Mouse.current.position.ReadValue() : g.start)
-                    : (g.touch != null ? g.touch.position.ReadValue() : g.start);
-                Vector2 d = pos - g.start;
-                if (d.magnitude < threshold) continue;
-
-                SwipeDir dir = Mathf.Abs(d.x) >= Mathf.Abs(d.y) ? (d.x < 0f ? SwipeDir.Left : SwipeDir.Right) : (d.y > 0f ? SwipeDir.Up : SwipeDir.None);
-                g.swiped = true;
+                if (!TrySwipe(ref g, threshold)) continue;
                 _gestures[i] = g;
-                if (dir != SwipeDir.None && Enabled)
-                {
-                    _queue.Enqueue(new Tap { kind = Kind.Swipe, realtime = g.startTime, id = g.id, swipe = dir, screenPosition = g.start, isPointer = true });
-                }
             }
+        }
+
+        /// <summary>Distance and direction test for a drag; queues the swipe once. Shared by Poll and lift-off.</summary>
+        private bool TrySwipe(ref Gesture g, float threshold)
+        {
+            Vector2 pos = g.mouse
+                ? (Mouse.current != null ? Mouse.current.position.ReadValue() : g.start)
+                : (g.touch != null ? g.touch.position.ReadValue() : g.start);
+            Vector2 d = pos - g.start;
+            if (d.magnitude < threshold) return false;
+
+            SwipeDir dir = Mathf.Abs(d.x) >= Mathf.Abs(d.y) ? (d.x < 0f ? SwipeDir.Left : SwipeDir.Right) : (d.y > 0f ? SwipeDir.Up : SwipeDir.None);
+            g.swiped = true;
+            if (dir != SwipeDir.None && Enabled)
+            {
+                _queue.Enqueue(new Tap { kind = Kind.Swipe, realtime = g.startTime, id = g.id, swipe = dir, screenPosition = g.start, isPointer = true });
+            }
+            return true;
         }
 
         public bool TryDequeue(out Tap tap)

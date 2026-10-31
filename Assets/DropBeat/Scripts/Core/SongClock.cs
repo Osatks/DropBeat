@@ -40,7 +40,22 @@ namespace DropBeat
         public double StartDsp => _startDsp;
 
         /// <summary>Smoothed estimate of AudioSettings.dspTime right now.</summary>
-        public double DspNow => Time.realtimeSinceStartupAsDouble - _minRealMinusDsp;
+        public double DspNow
+        {
+            get
+            {
+                double real = Time.realtimeSinceStartupAsDouble;
+                double est = real - _minRealMinusDsp;
+                // Audio clock stalled (output reconfiguration, interruption): stop running ahead of the music.
+                double stall = System.Math.Max(0.06, 4.0 * _bufferSec);
+                if (real - _lastDspChangeReal > stall) est = System.Math.Min(est, _lastDsp + stall);
+                return est;
+            }
+        }
+
+        private double _lastDsp;
+        private double _lastDspChangeReal;
+        private double _bufferSec = 0.02;
 
         /// <summary>Song time of the sample being mixed right now.</summary>
         public double RawTime
@@ -64,6 +79,8 @@ namespace DropBeat
             if (music == null) music = gameObject.AddComponent<AudioSource>();
             music.playOnAwake = false;
             music.loop = false;
+            AudioSettings.GetDSPBufferSize(out int bufferLength, out _);
+            _bufferSec = Mathf.Max(64, bufferLength) / (double)Mathf.Max(8000, AudioSettings.outputSampleRate);
             Sample(true);
         }
 
@@ -75,8 +92,16 @@ namespace DropBeat
         private void Sample(bool reset)
         {
             double real = Time.realtimeSinceStartupAsDouble;
-            double off = real - AudioSettings.dspTime;
-            if (reset || !_hasOffset || off < _minRealMinusDsp || off - _minRealMinusDsp > 0.25)
+            double dsp = AudioSettings.dspTime;
+            if (dsp != _lastDsp || reset)
+            {
+                _lastDsp = dsp;
+                _lastDspChangeReal = real;
+            }
+            double off = real - dsp;
+            // Re-anchor after a stall as soon as the offset is clearly more than buffer jitter.
+            double jump = System.Math.Max(0.05, 2.5 * _bufferSec);
+            if (reset || !_hasOffset || off < _minRealMinusDsp || off - _minRealMinusDsp > jump)
             {
                 _minRealMinusDsp = off;
                 _hasOffset = true;
@@ -84,7 +109,7 @@ namespace DropBeat
             else
             {
                 // Let the estimate creep later very slowly so it can follow audio-clock drift (<500 ppm).
-                _minRealMinusDsp += (real - _lastSampleReal) * 0.0005;
+                _minRealMinusDsp += System.Math.Min(0.1, real - _lastSampleReal) * 0.0005;
             }
             _lastSampleReal = real;
         }
@@ -121,6 +146,11 @@ namespace DropBeat
             IsRunning = true;
             if (music.clip == null) return;
 
+            if (fromTime * music.clip.frequency >= music.clip.samples)
+            {
+                // Past the end of the clip (the last second before the results): time runs on, no audio.
+                return;
+            }
             if (fromTime >= 0.0)
             {
                 int sample = Mathf.Clamp((int)(fromTime * music.clip.frequency), 0, Mathf.Max(0, music.clip.samples - 1));
@@ -139,7 +169,8 @@ namespace DropBeat
         {
             if (!IsRunning || IsPaused) return;
             _pausedRaw = RawTime;
-            _pausedSample = music.isPlaying ? music.timeSamples : -1;
+            // A scheduled source reports isPlaying before it starts: during the lead-in trust the clock, not the sample.
+            _pausedSample = music.isPlaying && _pausedRaw >= 0.0 ? music.timeSamples : -1;
             music.Pause();
             IsPaused = true;
         }

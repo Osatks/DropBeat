@@ -23,15 +23,15 @@ namespace DropBeat
 
         public JudgeWindows(double scale)
         {
-            perfect = 0.045 * scale;
-            great = 0.090 * scale;
-            good = 0.135 * scale;
-            earlyMiss = 0.180 * scale;
+            perfect = 0.050 * scale;
+            great = 0.100 * scale;
+            good = 0.150 * scale;
+            earlyMiss = 0.190 * scale;
         }
 
         public static JudgeWindows For(Difficulty d)
         {
-            return new JudgeWindows(d == Difficulty.Easy ? 1.2 : d == Difficulty.Hard ? 0.9 : 1.0);
+            return new JudgeWindows(d == Difficulty.Easy ? 1.25 : d == Difficulty.Hard ? 0.9 : 1.0);
         }
 
         public Grade Grade(double error)
@@ -71,7 +71,7 @@ namespace DropBeat
         public ScoreState(int totalNotes, Difficulty difficulty)
         {
             TotalNotes = totalNotes;
-            _missDamage = difficulty == Difficulty.Easy ? 0.08f : difficulty == Difficulty.Hard ? 0.14f : 0.11f;
+            _missDamage = difficulty == Difficulty.Easy ? 0.06f : difficulty == Difficulty.Hard ? 0.12f : 0.08f;
             int max = 0;
             for (int i = 0; i < totalNotes; i++) max += Mathf.RoundToInt(PerfectPoints * Multiplier(i));
             _maxScore = Mathf.Max(1, max);
@@ -107,17 +107,17 @@ namespace DropBeat
                 case Grade.Perfect:
                     Perfect++;
                     points = PerfectPoints;
-                    Health = Mathf.Min(1f, Health + 0.025f);
+                    Health = Mathf.Min(1f, Health + 0.03f);
                     break;
                 case Grade.Great:
                     Great++;
                     points = GreatPoints;
-                    Health = Mathf.Min(1f, Health + 0.015f);
+                    Health = Mathf.Min(1f, Health + 0.02f);
                     break;
                 case Grade.Good:
                     Good++;
                     points = GoodPoints;
-                    Health = Mathf.Min(1f, Health + 0.004f);
+                    Health = Mathf.Min(1f, Health + 0.008f);
                     break;
                 default:
                     Miss++;
@@ -133,6 +133,35 @@ namespace DropBeat
             if (countError) Errors.Add((float)error);
             return points;
         }
+
+        /// <summary>Bonus points (section clears, the song's twist); counted in the score.</summary>
+        public void AddBonus(int points)
+        {
+            points = Mathf.Max(0, points);
+            Score += points;
+            Bonus += points;
+        }
+
+        public int Bonus { get; private set; }
+
+        /// <summary>Every judgement in song order: x = note time, y = grade (results song strip).</summary>
+        public readonly List<Vector2> Marks = new List<Vector2>(512);
+
+        public void Mark(double t, Grade g) => Marks.Add(new Vector2((float)t, (float)g));
+
+        /// <summary>Accuracy needed for the next rank letter (1 when already at S).</summary>
+        public static float NextRankThreshold(float acc) => acc < 0.7f ? 0.7f : acc < 0.8f ? 0.8f : acc < 0.9f ? 0.9f : acc < 0.95f ? 0.95f : 1f;
+
+        /// <summary>0..1 progress through the current rank band.</summary>
+        public static float BandProgress(float acc)
+        {
+            float lo = acc < 0.7f ? 0f : acc < 0.8f ? 0.7f : acc < 0.9f ? 0.8f : acc < 0.95f ? 0.9f : 0.95f;
+            float hi = NextRankThreshold(acc);
+            return hi <= lo ? 1f : Mathf.Clamp01((acc - lo) / (hi - lo));
+        }
+
+        /// <summary>Extra damage on top of a miss (Overtime twist: misses hurt twice).</summary>
+        public void ExtraMissDamage() => Health = Mathf.Max(0f, Health - _missDamage);
 
         public string Rank(bool failed)
         {

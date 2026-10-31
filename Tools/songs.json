@@ -1,0 +1,14 @@
+[
+  {"name": "Solar Drift", "bpm": 112, "key": "F# minor", "style": "outrun synthwave with analog polysynth pads, gated snare, punchy kick, arpeggiated bass, warm sunset nostalgia"},
+  {"name": "Glacier Bloom", "bpm": 122, "key": "C# minor", "style": "melodic house with icy glassy plucks, shimmering bell arpeggios, airy pads, tight four-on-the-floor kick, crisp claps"},
+  {"name": "Voltage Run", "bpm": 174, "key": "D minor", "style": "energetic drum and bass with rolling breakbeats, electric reese bass, sharp snare on 2 and 4, futuristic synth stabs"},
+  {"name": "Jade Temple", "bpm": 105, "key": "E minor pentatonic", "style": "cinematic electronica with koto and guzheng melodies, taiko accents, deep sub bass, steady kick and snare groove"},
+  {"name": "Pixel Arcade", "bpm": 150, "key": "C major", "style": "upbeat 8-bit chiptune with square wave leads, triangle bass, noise-channel drums, bouncy retro video game energy"},
+  {"name": "Desert Mirage", "bpm": 120, "key": "D Hijaz (Phrygian dominant)", "style": "Arabic deep house with oud melody, darbuka and riq percussion, warm sub bass, hypnotic four-on-the-floor kick, desert night atmosphere"},
+  {"name": "Deep Ocean", "bpm": 122, "key": "G minor", "style": "deep house with rolling bassline, underwater pads, sonar-like synth pings, smooth four-on-the-floor kick, shuffled hi-hats"},
+  {"name": "Sakura Funk", "bpm": 118, "key": "A major", "style": "future funk with chopped disco strings, slap bass, bright electric piano chords, sparkling chimes, punchy kick and snare"},
+  {"name": "Thunder Forge", "bpm": 140, "key": "E minor", "style": "heavy industrial EDM with distorted guitars, metallic percussion hits, pounding kick, aggressive synth bass, anvil-like impacts"},
+  {"name": "Cosmic Trance", "bpm": 138, "key": "A minor", "style": "uplifting trance with soaring supersaw leads, rolling offbeat bass, driving four-on-the-floor kick, euphoric breakdown and drop"},
+  {"name": "Jungle Pulse", "bpm": 124, "key": "F minor", "style": "afro house with marimba and log drum melodies, tribal percussion, shakers, deep kick on every beat, organic rainforest atmosphere"},
+  {"name": "Midnight Disco", "bpm": 116, "key": "Bb minor", "style": "nu-disco with funky clavinet riffs, groovy slap bass, lush strings, four-on-the-floor kick with open hi-hats, late-night glamour"}
+]

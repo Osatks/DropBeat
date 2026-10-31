@@ -15,3 +15,16 @@ MonoBehaviour:
   songs:
   - {fileID: 11400000, guid: 23ae1263273b36c47ab4f9eb9f04ec06, type: 2}
   - {fileID: 11400000, guid: df100244d40aee34e81e9b03a18fe9e4, type: 2}
+  - {fileID: 11400000, guid: 3e68c062ccada4b4cb69cf185f91f004, type: 2}
+  - {fileID: 11400000, guid: ad1052d34693e7f449c8c386a5906d26, type: 2}
+  - {fileID: 11400000, guid: 4b9cf23d5af8e774eb3cbd3af0475009, type: 2}
+  - {fileID: 11400000, guid: 5ff3aa5488496514cb6b9c62948cd6dc, type: 2}
+  - {fileID: 11400000, guid: c27e1f3585182264a855b383352e93e9, type: 2}
+  - {fileID: 11400000, guid: b9291d35e374c5e4a9477eb371974859, type: 2}
+  - {fileID: 11400000, guid: 0741ac6ebdc4c154583521df3b2e4765, type: 2}
+  - {fileID: 11400000, guid: c84774d0ad6e4a745895f4cd66bd36fc, type: 2}
+  - {fileID: 11400000, guid: e12c28dc7964b074eb6390d71ea43b2d, type: 2}
+  - {fileID: 11400000, guid: d668276fcbec97248a65b656004fee78, type: 2}
+  - {fileID: 11400000, guid: 2148e9c43f3f16c46be62bb40f0f4b5f, type: 2}
+  - {fileID: 11400000, guid: 1975d9d611e37f049b639651a37d65e4, type: 2}
+  - {fileID: 11400000, guid: 48df60666417c694a88091b18918b8ee, type: 2}
